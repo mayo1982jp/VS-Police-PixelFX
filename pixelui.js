@@ -181,12 +181,13 @@ import * as collectFx from "./pixelfx/fx/pickups/collect-burst.js";
     /* ==========================================================
        Board sprites
        ========================================================== */
+    // 青い痕跡チップと競合しないよう、ビルは青系を避けた低彩度の暖色／中性色で統一する。
     const BUILDING_PALETTES = [
-        { wall: "#26364a", roof: "#3f5874", light: "#6f93b8", dark: "#17222f", accent: "#7ee8fa" },
-        { wall: "#3a2a22", roof: "#5a4030", light: "#8a6244", dark: "#22160f", accent: "#ffb74d" },
-        { wall: "#1e3a3a", roof: "#2f5a58", light: "#5a9a94", dark: "#102424", accent: "#7ee8fa" },
-        { wall: "#30263f", roof: "#4a3a62", light: "#7a62a0", dark: "#1a1226", accent: "#c58bff" },
-        { wall: "#2f3a22", roof: "#4a5a30", light: "#7a8a4a", dark: "#1a2010", accent: "#b4e070" },
+        { wall: "#3a3936", roof: "#565450", light: "#8e8b84", dark: "#211f1c", accent: "#ffd166" },
+        { wall: "#4a3126", roof: "#694634", light: "#a06a4a", dark: "#281810", accent: "#e8b07a" },
+        { wall: "#4f473b", roof: "#6b5f4e", light: "#9c8f7c", dark: "#2d2820", accent: "#ecd8b4" },
+        { wall: "#3b2a45", roof: "#5b4068", light: "#9670ac", dark: "#22162b", accent: "#e3c2ff" },
+        { wall: "#33402a", roof: "#4c5c3a", light: "#83986a", dark: "#1e2718", accent: "#d8e8a8" },
     ];
 
     function drawBuilding(p, v) {
@@ -207,59 +208,137 @@ import * as collectFx from "./pixelfx/fx/pickups/collect-burst.js";
         p.rect(32, 32, 2, 2, dark);
 
         if (v === 0) {
-            p.ring(20, 20, 10, 2, GOLD_D);
-            p.ring(20, 20, 8, 1, GOLD);
-            p.rect(16, 15, 8, 10, H("#1c2a3a"));
-            p.text("H", 20, 15, GOLD, { font: "mini", scale: 2, align: "center", outline: INK });
-            p.rect(7, 8, 3, 3, H("#566a80"));
-            p.rect(7, 8, 1, 1, H("#9ab0c8"));
-            p.rect(30, 29, 3, 3, H("#151f2c"));
+            // 病院：落ち着いたスレートの屋上ヘリポート
+            p.rect(7, 7, 5, 4, INK);
+            p.rect(8, 8, 3, 2, H("#5c606c"));
+            p.rect(8, 8, 1, 1, H("#a8acb8"));
+            p.rect(28, 7, 5, 4, INK);
+            p.rect(29, 8, 3, 2, H("#484c56"));
+            p.rect(30, 8, 1, 1, H("#8f94a2"));
+            p.ring(20, 20, 10, 2, H("#8a6a20"));
+            p.ring(20, 20, 8, 1, accent);
+            p.circle(20, 20, 7, H("#22252c"));
+            p.text("H", 20, 15, accent, { font: "mini", scale: 2, align: "center", outline: INK });
+            p.rect(19, 9, 2, 1, H("#fff3c0"));
+            p.rect(19, 30, 2, 1, H("#fff3c0"));
+            p.rect(9, 19, 1, 2, H("#fff3c0"));
+            p.rect(30, 19, 1, 2, H("#fff3c0"));
+            p.rect(7, 29, 6, 5, INK);
+            p.rect(8, 30, 4, 3, dark);
+            p.rect(9, 30, 1, 2, H("#b8a060"));
+            p.rect(27, 29, 6, 5, INK);
+            p.rect(28, 30, 4, 3, H("#3a3d46"));
+            p.rect(28, 30, 4, 1, H("#7a7e8a"));
         } else if (v === 1) {
-            p.rect(11, 13, 2, 8, H("#24170e"));
-            p.rect(27, 13, 2, 8, H("#24170e"));
-            p.ellipse(20, 14, 8, 6, INK);
-            p.ellipse(20, 13, 7, 5, H("#6b4a2e"));
-            p.ellipse(20, 12, 5, 3, H("#9a6a3e"));
-            p.rect(15, 12, 10, 2, H("#c28c52"));
-            p.rect(14, 19, 12, 2, H("#3a2616"));
-            p.rect(8, 28, 9, 3, H("#2a1c12"));
-            p.rect(9, 28, 7, 1, H("#7a5636"));
-            p.rect(23, 29, 8, 2, H("#2a1c12"));
-            p.rect(24, 29, 6, 1, H("#5f4228"));
+            // レンガアパート：給水塔と暖色の窓
+            p.rect(14, 8, 12, 8, INK);
+            p.rect(15, 9, 10, 6, H("#7a4a2e"));
+            p.rect(15, 9, 10, 1, H("#b07a4e"));
+            p.rect(15, 12, 10, 1, H("#4a2a1a"));
+            p.rect(15, 14, 10, 1, H("#5a3420"));
+            p.tri(12, 9, 20, 3, 28, 9, INK);
+            p.tri(14, 9, 20, 5, 26, 9, H("#8a5a38"));
+            p.rect(20, 4, 1, 1, H("#d8a060"));
+            p.rect(15, 16, 2, 3, H("#2a1a12"));
+            p.rect(23, 16, 2, 3, H("#2a1a12"));
+            p.line(16, 18, 24, 17, H("#5a3a24"));
+            p.rect(22, 10, 1, 6, H("#c8a070"));
+            for (let y = 11; y < 16; y += 2) p.rect(21, y, 2, 1, H("#c8a070"));
+            p.rect(7, 7, 4, 4, INK);
+            p.rect(8, 8, 2, 2, H("#5a3a24"));
+            p.rect(29, 7, 4, 4, INK);
+            p.rect(30, 8, 2, 2, H("#5a3a24"));
+            p.rect(6, 20, 28, 1, H("#352016"));
+            p.rect(6, 27, 28, 1, H("#352016"));
+            p.rect(6, 33, 28, 1, H("#352016"));
+            for (const x of [10, 16, 22, 28]) p.rect(x, 23, 2, 1, H("#352016"));
+            for (const x of [8, 14, 20, 26, 32]) p.rect(x, 30, 2, 1, H("#352016"));
+            for (const [x, y] of [[7, 21], [13, 21], [19, 21], [25, 21], [7, 28], [13, 28], [19, 28], [25, 28]]) {
+                p.rect(x, y, 4, 4, INK);
+                p.rect(x + 1, y + 1, 2, 2, H("#b07a4a"));
+                p.rect(x + 1, y + 1, 2, 1, H("#e8bc84"));
+                p.rect(x + 1, y + 3, 2, 1, H("#2a1a12"));
+            }
         } else if (v === 2) {
-            for (const [x, y] of [[8, 8], [20, 8], [8, 21], [20, 21]]) {
-                p.rect(x, y, 10, 7, INK);
-                p.rect(x + 1, y + 1, 8, 5, H("#1b3a42"));
-                p.rect(x + 2, y + 2, 6, 3, accent);
-                p.rect(x + 2, y + 2, 3, 1, H("#d8ffff"));
-                p.line(x + 2, y + 6, x + 7, y + 6, H("#0e2428"));
+            // 砂岩のオフィス：青い痕跡と競合しない暗いガラス窓
+            p.rect(6, 10, 28, 1, H("#4a3f32"));
+            p.rect(6, 18, 28, 1, H("#4a3f32"));
+            p.rect(6, 27, 28, 1, H("#4a3f32"));
+            for (const [x, y] of [[11, 12], [18, 12], [25, 12], [11, 20], [18, 20], [25, 20]]) {
+                p.rect(x, y, 1, 3, H("#4a3f32"));
             }
-            p.rect(9, 17, 2, 2, H("#101c22"));
-            p.rect(30, 16, 2, 2, H("#101c22"));
+            p.rect(9, 7, 6, 3, INK);
+            p.rect(10, 7, 4, 2, H("#6a6050"));
+            p.rect(25, 7, 6, 3, INK);
+            p.rect(26, 7, 4, 2, H("#6a6050"));
+            for (const [x, y] of [[7, 11], [21, 11], [7, 20], [21, 20]]) {
+                p.rect(x, y, 12, 7, INK);
+                p.rect(x + 1, y + 1, 10, 5, H("#3a3026"));
+                p.rect(x + 2, y + 2, 8, 3, H("#241c15"));
+                p.rect(x + 2, y + 2, 4, 1, H("#5a4a38"));
+                p.rect(x + 2, y + 3, 2, 1, accent);
+                p.rect(x + 7, y + 3, 2, 1, H("#8a6a48"));
+                p.rect(x + 5, y + 2, 1, 3, H("#4a3a28"));
+                p.rect(x + 2, y + 4, 7, 1, H("#1a1410"));
+            }
+            p.rect(7, 29, 4, 4, INK);
+            p.rect(8, 30, 2, 2, H("#4a3f32"));
+            p.rect(29, 29, 4, 4, INK);
+            p.rect(30, 30, 2, 2, H("#4a3f32"));
+            p.rect(17, 29, 6, 5, INK);
+            p.rect(18, 30, 4, 3, H("#4a3a28"));
+            p.rect(19, 30, 2, 1, accent);
         } else if (v === 3) {
-            p.rect(19, 9, 2, 23, H("#48586c"));
-            p.rect(20, 9, 1, 23, H("#a0b4c8"));
-            p.rect(13, 14, 14, 1, H("#48586c"));
-            p.rect(15, 20, 10, 1, H("#48586c"));
-            p.rect(19, 8, 2, 2, RED);
-            p.rect(19, 8, 1, 1, H("#ffd0c0"));
-            p.rect(8, 25, 8, 5, INK);
-            p.rect(9, 26, 6, 3, BLUE_D);
-            p.rect(10, 27, 4, 1, BLUE);
-            p.rect(24, 26, 8, 5, INK);
-            p.rect(25, 27, 6, 3, BLUE_D);
-            p.rect(26, 28, 4, 1, BLUE);
-        } else {
-            for (const [x, y] of [[8, 9], [21, 9], [8, 23], [21, 23]]) {
-                p.rect(x, y, 9, 7, INK);
-                p.rect(x + 1, y + 1, 7, 5, H("#4a5a3a"));
-                p.rect(x + 2, y + 2, 5, 3, H("#222c18"));
-                p.rect(x + 3, y + 3, 3, 1, H("#8a9a6a"));
-                p.rect(x + 4, y + 3, 1, 1, H("#c8d8a8"));
+            // 通信塔：アンテナとパラボラ、紫の管制窓
+            p.rect(19, 5, 2, 17, H("#2a1a32"));
+            p.rect(19, 5, 1, 17, H("#b090c0"));
+            for (let y = 8; y <= 20; y += 4) {
+                p.rect(16, y, 8, 1, INK);
+                p.rect(17, y, 6, 1, H("#6a4a78"));
             }
-            p.rect(19, 17, 2, 12, H("#6a7a4a"));
-            p.rect(14, 24, 4, 1, H("#3a4a2a"));
-            p.rect(22, 24, 4, 1, H("#3a4a2a"));
+            p.rect(18, 3, 4, 3, INK);
+            p.rect(19, 4, 2, 1, H("#ffcf7a"));
+            p.ellipse(28, 13, 5, 4, INK);
+            p.ellipse(28, 13, 4, 3, H("#8a6a9a"));
+            p.ellipse(27, 12, 2, 1, H("#e0c0f0"));
+            p.rect(28, 16, 1, 2, H("#4a3050"));
+            p.line(21, 12, 24, 13, H("#2a1a32"));
+            p.rect(7, 25, 8, 7, INK);
+            p.rect(8, 26, 6, 5, H("#4a3050"));
+            p.rect(9, 27, 1, 1, accent);
+            p.rect(12, 27, 1, 1, accent);
+            p.rect(9, 30, 1, 1, accent);
+            p.rect(12, 30, 1, 1, accent);
+            p.rect(24, 26, 8, 6, INK);
+            p.rect(25, 27, 6, 4, H("#4a3050"));
+            p.rect(26, 28, 1, 2, accent);
+            p.rect(28, 28, 1, 2, accent);
+        } else {
+            // 青果市場：天窓とストライプの日よけ
+            p.rect(8, 7, 24, 7, INK);
+            for (let i = 0; i < 3; i++) {
+                p.rect(9 + i * 8, 8, 6, 5, H("#3a4a2a"));
+                p.rect(9 + i * 8, 8, 6, 1, H("#a8c080"));
+                p.rect(10 + i * 8, 9, 2, 2, accent);
+            }
+            p.rect(6, 17, 4, 4, INK);
+            p.rect(7, 18, 2, 2, H("#5a6a3a"));
+            p.rect(30, 17, 4, 4, INK);
+            p.rect(31, 18, 2, 2, H("#5a6a3a"));
+            p.rect(7, 26, 26, 3, INK);
+            for (let i = 0; i < 6; i++) {
+                p.rect(8 + i * 4, 26, 2, 2, H("#d8e8a8"));
+                p.rect(10 + i * 4, 26, 2, 2, H("#5a6a3a"));
+            }
+            p.rect(7, 29, 26, 1, INK);
+            p.rect(8, 30, 5, 4, INK);
+            p.rect(9, 31, 3, 2, H("#8a6a3a"));
+            p.rect(9, 31, 3, 1, H("#c09a60"));
+            p.rect(27, 30, 5, 4, INK);
+            p.rect(28, 31, 3, 2, H("#8a6a3a"));
+            p.rect(28, 31, 3, 1, H("#c09a60"));
+            p.rect(10, 32, 1, 1, H("#c8d8a8"));
+            p.rect(29, 32, 1, 1, H("#c8d8a8"));
         }
         p.rect(2, 2, 1, 1, WHITE_C);
         p.rect(37, 37, 1, 1, BLACK);
