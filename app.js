@@ -78,7 +78,7 @@
                 }))
             ),
             revealedClues: [],
-            searchLog: [],       // 警察が行った捜索 { round, x, y, result: 'empty' | 'clue' }
+            searchLog: [],       // 警察が行った捜索 { round, x, y, result: 'empty' | 'clue' | 'found' }
             logs: [],
             transitioning: false,
         };
@@ -89,10 +89,13 @@
     let boardContainer, buildingsLayer, intersectionsLayer, searchlightLayer;
     let roundTrackEl, phaseLabelEl, turnLabelEl, logAreaEl, helpTextEl, cluesRevealedEl;
     let heliStatusEl, heliButtonsEl, hintBarEl, btnEndPoliceTurn;
+    let heliReadyCountEl, heliProgressEl, soundButton;
     let blindOverlay, blindTitle, blindMessage, blindConfirmBtn;
     let splashScreen, gameoverModal, gameoverIcon, gameoverTitle, gameoverMessage;
-    let routeModal, routeCanvas;
+    let routeModal, routeCanvas, routeShowSearchEl, routeStatusEl;
+    let sirenOverlayEl;
     let btnRotateClose;
+    let foldBlocks = [];
 
     function cacheElements() {
         boardContainer     = $('#board-container');
@@ -107,6 +110,9 @@
         cluesRevealedEl = $('#clues-revealed');
         heliStatusEl    = $('#heli-status');
         heliButtonsEl   = $('#heli-buttons');
+        heliReadyCountEl= $('#heli-ready-count');
+        heliProgressEl  = $('#heli-progress');
+        soundButton     = $('#btn-sound');
         hintBarEl       = $('#hint-bar');
         btnEndPoliceTurn= $('#btn-end-police-turn');
         blindOverlay    = $('#blind-overlay');
@@ -120,7 +126,15 @@
         gameoverMessage = $('#gameover-message');
         routeModal      = $('#route-modal');
         routeCanvas     = $('#route-canvas');
+        routeShowSearchEl = $('#route-show-search');
+        routeStatusEl   = $('#route-status');
+        sirenOverlayEl  = $('#siren-overlay');
         btnRotateClose  = $('#btn-rotate-close');
+        foldBlocks = [
+            $('#left-clues'),
+            $('#left-legend'),
+            $('#log-block'),
+        ].filter(Boolean);
     }
 
     /* ---------- タッチフィードバック（Android のバイブレーション） ---------- */
@@ -128,6 +142,15 @@
         try {
             if (navigator.vibrate) navigator.vibrate(pattern);
         } catch (e) { /* 非対応環境では何もしない */ }
+    }
+
+    /* ---------- サウンド（audio.js / WebAudio シンセ） ---------- */
+    function sfx(name, detail) {
+        if (typeof window === 'undefined' || !window.VSPoliceSound) return;
+        try { window.VSPoliceSound.play(name, detail || {}); } catch (e) { /* 音は進行を止めない */ }
+    }
+    function sound() {
+        return (typeof window !== 'undefined' && window.VSPoliceSound) ? window.VSPoliceSound : null;
     }
 
     /* ---------- ピクセルUI用のVFXイベント ---------- */
@@ -139,6 +162,63 @@
                 detail: Object.assign({ type }, detail || {})
             }));
         } catch (e) { /* 演出はゲーム進行を止めない */ }
+    }
+
+    /* ---------- 発見・捜索時の画面演出 ---------- */
+    let sirenTimer = null;
+    function flashSiren(duration = 2400) {
+        if (!sirenOverlayEl) return;
+        sirenOverlayEl.classList.remove('active');
+        // 連続発火時にアニメーションを確実にリスタートさせる
+        void sirenOverlayEl.offsetWidth;
+        sirenOverlayEl.classList.add('active');
+        if (sirenTimer) clearTimeout(sirenTimer);
+        sirenTimer = setTimeout(() => {
+            sirenOverlayEl.classList.remove('active');
+            sirenTimer = null;
+        }, duration);
+    }
+
+    function flashBuilding(bx, by, cls, duration = 760) {
+        // 終局・ターン終了時は直後に render() が走ってクラスが消えるため、
+        // 1フレーム待ってから付与し、同期再描画をまたいでも演出を残す。
+        const apply = () => {
+            const el = buildingEl(bx, by);
+            if (!el) return;
+            el.classList.add(cls);
+            setTimeout(() => {
+                const current = buildingEl(bx, by);
+                if (current) current.classList.remove(cls);
+            }, duration);
+        };
+        // rAF は非表示タブで止まるため、可視性に依存しない setTimeout を使う。
+        setTimeout(apply, 0);
+    }
+
+    /* ---------- 縦画面の折りたたみ（凡例・ログ） ---------- */
+    let lastFoldMobile = null;
+    function syncFoldBlocks(force) {
+        const mq = (typeof window !== 'undefined' && window.matchMedia)
+            ? window.matchMedia('(orientation: portrait) and (max-width: 860px)')
+            : null;
+        const mobile = !!(mq && mq.matches);
+        if (!force && mobile === lastFoldMobile) return;
+        lastFoldMobile = mobile;
+        foldBlocks.forEach((el) => {
+            el.open = !mobile;
+        });
+    }
+
+    /* ---------- サウンドボタン表示 ---------- */
+    function syncSoundButton() {
+        if (!soundButton) return;
+        const s = sound();
+        const on = s ? !s.isMuted() : false;
+        soundButton.classList.toggle('is-muted', !on);
+        soundButton.setAttribute('aria-pressed', String(on));
+        soundButton.setAttribute('aria-label', on ? 'サウンドをオフにする' : 'サウンドをオンにする');
+        soundButton.title = on ? 'サウンド ON（クリックでOFF）' : 'サウンド OFF（クリックでON）';
+        soundButton.innerHTML = `<span class="sound-icon" aria-hidden="true">${on ? '🔊' : '🔇'}</span><span class="sound-label">${on ? '音ON' : '音OFF'}</span>`;
     }
 
     /* ---------- 盤面 DOM 生成 ---------- */
@@ -723,6 +803,8 @@
         renderControlPanel();
         renderCluesRevealed();
         renderSearchlight();
+        const snd = sound();
+        if (snd) snd.setPhase(S.phase);
     }
 
     function renderRoundTrack() {
@@ -876,13 +958,23 @@
                     h.className = 'heli ' + heli.id;
                     if (S.police.selected === heli.index && S.phase === 'ROUND_POLICE') h.classList.add('selected');
                     if (heli.hasActed) h.classList.add('acted');
-                    h.title = `${heli.label}ヘリ` + (S.mode === '3pvp' ? ` (警察${heli.owner === 0 ? 'A' : 'B'})` : '');
+                    h.title = `${heli.label}ヘリ` + (S.mode === '3pvp' ? ` (警察${heli.owner === 0 ? 'A' : 'B'})` : '')
+                        + (heli.hasActed ? ' / 行動済み' : ' / 未行動');
+                    h.setAttribute('aria-label', h.title);
                     // 3pvp: 所属バッジ
                     if (S.mode === '3pvp') {
                         const badge = document.createElement('span');
                         badge.className = 'heli-badge';
                         badge.textContent = heli.owner === 0 ? 'A' : 'B';
                         h.appendChild(badge);
+                    }
+                    // 行動済みは盤面上でもチェックを付けて一目で分かるようにする
+                    if (heli.hasActed) {
+                        const check = document.createElement('span');
+                        check.className = 'heli-check';
+                        check.textContent = '✓';
+                        check.setAttribute('aria-hidden', 'true');
+                        h.appendChild(check);
                     }
                     h.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -943,6 +1035,16 @@
             }
         }
 
+        const inPolice = S.phase === 'ROUND_POLICE' && S.mode !== 'cpu_police';
+        const placedCount = S.police.helis.filter(h => h.x != null).length;
+        const unactedCount = S.police.helis.filter(h => !h.hasActed && h.x != null).length;
+        if (heliReadyCountEl) {
+            heliReadyCountEl.textContent = inPolice
+                ? (unactedCount > 0 ? `${unactedCount}機 未行動` : '全機 行動済')
+                : `${placedCount}/3 配置`;
+            heliReadyCountEl.classList.toggle('is-done', inPolice && unactedCount === 0);
+        }
+
         // ヘリステータス（行ごとタップして選択できる）
         heliStatusEl.innerHTML = '';
         S.police.helis.forEach((h, i) => {
@@ -950,10 +1052,16 @@
             row.className = 'heli-status-row';
             const pos = (h.x != null) ? `(${h.x},${h.y})` : '未配置';
             const ownerTag = (S.mode === '3pvp') ? `<small class="howner">${h.owner === 0 ? 'A' : 'B'}</small>` : '';
+            const lockedByOwner = S.mode === '3pvp' && S.phase === 'ROUND_POLICE' && h.owner !== S.police.subPlayer;
+            const stateText = h.hasActed
+                ? '✓ 行動済'
+                : lockedByOwner ? '相手の番' : '● 未行動';
+            row.classList.toggle('is-acted', h.hasActed);
+            row.classList.toggle('is-locked', lockedByOwner);
             row.innerHTML = `
                 <span class="hicon ${h.id}"></span>
                 <span class="hlabel">${h.label}ヘリ ${pos} ${ownerTag}</span>
-                <span class="hstate ${h.hasActed ? 'acted' : 'ready'}">${h.hasActed ? '行動済' : '待機'}</span>`;
+                <span class="hstate ${h.hasActed ? 'acted' : lockedByOwner ? 'locked' : 'ready'}">${stateText}</span>`;
             const selectable = (S.phase === 'ROUND_POLICE' || S.phase === 'SETUP_POLICE') && !h.hasActed
                 && !(S.mode === '3pvp' && S.phase === 'ROUND_POLICE' && h.owner !== S.police.subPlayer);
             if (selectable) {
@@ -965,22 +1073,43 @@
             // ボタン
             const btn = heliButtonsEl.children[i];
             if (btn) {
-                btn.classList.toggle('selected', S.police.selected === i);
+                const selected = S.police.selected === i;
                 let dis = h.hasActed || (S.phase !== 'ROUND_POLICE' && S.phase !== 'SETUP_POLICE');
-                if (S.mode === '3pvp' && S.phase === 'ROUND_POLICE' && h.owner !== S.police.subPlayer) dis = true;
+                if (lockedByOwner) dis = true;
                 btn.disabled = dis;
+                btn.classList.toggle('selected', selected);
+                btn.classList.toggle('is-acted', h.hasActed);
+                btn.classList.toggle('is-ready', !h.hasActed && selectable);
+                btn.classList.toggle('is-locked', lockedByOwner);
+                btn.setAttribute('aria-pressed', String(selected));
+                btn.setAttribute('aria-label', `${h.label}ヘリ ${pos} ${h.hasActed ? '行動済み' : lockedByOwner ? '相手の番' : '未行動'}`);
+                btn.innerHTML = `
+                    <span class="heli-btn-label">${h.label}</span>
+                    <span class="heli-btn-state">${h.hasActed ? '✓ 行動済' : lockedByOwner ? '相手の番' : '● 未行動'}</span>`;
             }
         });
 
+        // ターン内の進行状況を3つのステップで表示
+        if (heliProgressEl) {
+            heliProgressEl.innerHTML = S.police.helis.map((h, i) => {
+                const cls = [
+                    'heli-step',
+                    'heli-step-' + h.id,
+                    h.hasActed ? 'done' : 'ready',
+                    S.police.selected === i ? 'current' : '',
+                ].filter(Boolean).join(' ');
+                return `<span class="${cls}" title="${h.label}ヘリ: ${h.hasActed ? '行動済み' : '未行動'}">${h.hasActed ? '✓' : ''}</span>`;
+            }).join('');
+        }
+
         // 主アクションは「ターン終了」のみ（移動／捜索は盤面直接タップ）
-        const inPolice = S.phase === 'ROUND_POLICE' && S.mode !== 'cpu_police';
         btnEndPoliceTurn.style.display = inPolice ? 'block' : 'none';
         if (inPolice) {
             const allActed = S.police.helis.every(h => h.hasActed);
             btnEndPoliceTurn.disabled = !allActed;
             btnEndPoliceTurn.textContent = allActed
                 ? '警察ターン終了'
-                : `警察ターン終了 (${S.police.helis.filter(h=>!h.hasActed).length}機 未行動)`;
+                : `警察ターン終了 (${unactedCount}機 未行動)`;
         }
 
         // 盤面上部のヒントバー
@@ -1020,7 +1149,7 @@
                 const moves = validCarMoves();
                 return moves.length === 0
                     ? '移動先がありません！'
-                    : `光るビルをタップして移動（${moves.length}箇所）`;
+                    : `光るビルをタップして移動（${moves.length}箇所）※痕跡のビルには戻れません`;
             }
             case 'GAME_OVER':
                 return 'ゲームが終了しました。';
@@ -1049,6 +1178,7 @@
     function onBuildingClick(bx, by) {
         if (S.phase === 'SETUP_THIEF') {
             buzz(12);
+            sfx('place');
             setupThiefCar(bx, by);
             return;
         }
@@ -1062,6 +1192,7 @@
                 // タッチ操作では「反応なし」が誤解を生むため軽くフィードバック
                 addLog('そのビルは選んでいるヘリから捜索できません。光るビルをタップしてください。', 'log-alert');
                 buzz([18, 26, 18]);
+                sfx('deny');
                 return;
             }
             buzz(14);
@@ -1073,6 +1204,7 @@
             if (!moves.some(m => m.x === bx && m.y === by)) {
                 addLog('そのビルには移動できません。', 'log-alert');
                 buzz([30, 40, 30]);
+                sfx('deny');
                 return;
             }
             buzz(18);
@@ -1099,6 +1231,7 @@
             if (!moves.some(m => m.x === ix && m.y === iy)) {
                 addLog('その交差点へは移動できません。黄色く光る交差点をタップしてください。', 'log-alert');
                 buzz([18, 26, 18]);
+                sfx('deny');
                 return;
             }
             buzz(14);
@@ -1113,11 +1246,12 @@
         const heli = S.police.helis[index];
         if (!heli) return;
         if (S.phase === 'ROUND_POLICE') {
-            if (heli.hasActed) { buzz([20, 30, 20]); return; }
+            if (heli.hasActed) { buzz([20, 30, 20]); sfx('deny'); return; }
             // 3pvp: 現在のサブプレイヤーのヘリのみ選択可
-            if (S.mode === '3pvp' && heli.owner !== S.police.subPlayer) { buzz([20, 30, 20]); return; }
+            if (S.mode === '3pvp' && heli.owner !== S.police.subPlayer) { buzz([20, 30, 20]); sfx('deny'); return; }
         }
         buzz(10);
+        sfx('select');
         S.police.selected = index;
         render();
     }
@@ -1135,6 +1269,7 @@
         heli.x = ix; heli.y = iy;
         addLog(`${heli.label}ヘリを (${ix},${iy}) に配置。`, 'log-police');
         uiEvent('heli-place', { x: ix, y: iy });
+        sfx('place');
         // 次の未配置ヘリへ
         const next = S.police.helis.find(h => h.x == null);
         if (next) S.police.selected = next.index;
@@ -1185,6 +1320,7 @@
         heli.hasActed = true;
         addLog(`${heli.label}ヘリ ${old} → (${ix},${iy}) に移動。`, 'log-police');
         uiEvent('heli-move', { x: ix, y: iy });
+        sfx('move');
         autoSelectNextHeli();
         render();
         maybeEndPolicePhase();
@@ -1196,17 +1332,26 @@
         b.isSearched = true;
         b.searchedRound = S.currentRound;
         addLog(`${heli.label}ヘリが (${bx},${by}) を捜索…`, 'log-police');
+        sfx('scan');
         if (S.thief.carX === bx && S.thief.carY === by) {
-            // 発見!
+            // 発見!（リプレイで「どこで見つけたか」を出せるよう捜索ログにも残す）
+            S.searchLog.push({
+                round: S.currentRound, x: bx, y: by,
+                result: 'found', heli: heli.id,
+            });
             addLog(`逃走車を発見!! 警察の勝利!`, 'log-alert');
             buzz([90, 60, 90, 60, 200]);
             S.winner = 'POLICE';
             render();
+            flashBuilding(bx, by, 'scan-target', 900);
+            sfx('found');
             uiEvent('found', { x: bx, y: by });
             endGame('POLICE');
             return;
         }
+        let result = 'empty';
         if (b.clue) {
+            result = 'clue';
             b.clueRevealed = true;
             addLog(`   → 痕跡「${clueLabel[b.clue]}」を発見!`, 'log-alert');
             buzz(50);
@@ -1215,20 +1360,25 @@
                 // 「発見ラウンド - 2」以下に制限できるため、事後分布の精度が上がる。
                 S.revealedClues.push({ x: bx, y: by, type: b.clue, foundRound: S.currentRound });
             }
+            sfx('clue', { clue: b.clue });
             uiEvent('clue', { x: bx, y: by, clue: b.clue, round: S.currentRound });
         } else {
             addLog(`   → 何もない (確定)。`, 'log-info');
             showSearchResultBadge(bx, by); // 「いない」バッジは空振りのときのみ（痕跡発見時はチップを隠さない）
+            sfx('empty');
             uiEvent('empty', { x: bx, y: by });
         }
         // 警察CPUの事後分布推定用に捜索結果を記録
         S.searchLog.push({
             round: S.currentRound,
             x: bx, y: by,
-            result: b.clue ? 'clue' : 'empty',
+            result,
+            heli: heli.id,
         });
         autoSelectNextHeli();
         render();
+        flashBuilding(bx, by, 'scan-target', 850);
+        if (result === 'clue') flashBuilding(bx, by, 'clue-reveal', 950);
         maybeEndPolicePhase();
     }
 
@@ -1328,6 +1478,7 @@
         addLog(S.mode === 'cpu'
             ? `Round ${round}：逃走車が移動した（移動先は警察には伏せられる）。`
             : `逃走車が (${ox},${oy}) → (${nx},${ny}) へ移動。痕跡「${clueLabel[clue]}」を落下。`, 'log-thief');
+        sfx('move');
         render();
         // 次のラウンドへ
         advanceRound();
@@ -1352,6 +1503,7 @@
         const firstReady = S.police.helis.find(h => h.x != null && (S.mode !== '3pvp' || h.owner === 0));
         if (firstReady) S.police.selected = firstReady.index;
         addLog(`=== Round ${r} 開始 ===`, 'log-info');
+        sfx('round');
         if (r === 1) uiEvent('round-start', { round: r, mode: S.mode });
         if (S.mode === 'cpu_police') {
             // 警察CPUターンを自動実行
@@ -1432,7 +1584,7 @@
         blindMessage.textContent = message;
         blindConfirmBtn.textContent = confirmLabel;
         blindOverlay.classList.remove('hidden');
-        blindConfirmBtn.onclick = () => { buzz(16); cb(); };
+        blindConfirmBtn.onclick = () => { buzz(16); sfx('confirm'); cb(); };
         // キーボードユーザーも即確定できるようフォーカスを運ぶ
         blindConfirmBtn.focus({ preventScroll: true });
     }
@@ -1448,7 +1600,11 @@
         S.winner = winner;
         hideBlind();
         render();
+        const snd = sound();
+        if (snd) snd.setGameActive(false);
         buzz(winner === 'POLICE' ? [60, 50, 60, 50, 160] : [120, 80, 120]);
+        flashSiren(winner === 'POLICE' ? 2800 : 1400);
+        sfx(winner === 'POLICE' ? 'win' : 'lose');
         // 全開示
         setTimeout(() => {
             gameoverModal.classList.remove('hidden');
@@ -2810,6 +2966,7 @@
     function showRouteReplay() {
         if (routePlayTimer) { clearTimeout(routePlayTimer); routePlayTimer = null; }
         routeModal.classList.remove('hidden');
+        const showSearches = !routeShowSearchEl || routeShowSearchEl.checked;
         // 低解像度の論理座標で描き、CSS側でドットを保ったまま拡大する
         const scale = Math.min(2, window.devicePixelRatio || 1);
         const LOGICAL = 320;
@@ -2820,6 +2977,7 @@
         ctx.imageSmoothingEnabled = false;
         const W = LOGICAL, H = LOGICAL;
         const cell = W / B_SIZE;
+
         // チェッカー状のアスファルト
         for (let gy = 0; gy < B_SIZE; gy++) {
             for (let gx = 0; gx < B_SIZE; gx++) {
@@ -2846,16 +3004,19 @@
         ctx.fillRect(W - 12, H - 4, 10, 2); ctx.fillRect(W - 4, H - 12, 2, 10);
 
         const pts = S.thief.path.slice();
-        if (pts.length === 0) return;
+        if (pts.length === 0) {
+            if (routeStatusEl) routeStatusEl.textContent = 'ルート情報がありません。';
+            return;
+        }
         const cxOf = (p) => Math.round(p.x * cell + cell / 2);
         const cyOf = (p) => Math.round(p.y * cell + cell / 2);
+
         // 全経路を薄く表示
         for (const p of pts) {
             ctx.fillStyle = 'rgba(255,255,255,0.14)';
             ctx.fillRect(cxOf(p) - 3, cyOf(p) - 3, 6, 6);
         }
-        // アニメで経路を順に描く
-        let idx = 0;
+
         const drawSegment = (x1, y1, x2, y2) => {
             const inset = 13;
             if (x1 === x2) {
@@ -2894,44 +3055,147 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(String(round), cx, cy + 1);
         };
-        const play = () => {
-            if (routeModal.classList.contains('hidden')) return; // モーダルが閉じたら停止
-            if (idx >= pts.length) return;
-            const p = pts[idx];
-            const cx = cxOf(p), cy = cyOf(p);
-            if (idx > 0) {
-                const prev = pts[idx - 1];
-                drawSegment(cxOf(prev), cyOf(prev), cx, cy);
-            }
-            // この地点を離れたラウンド = idx+1 (初期地点は Round 1 で離脱)
-            const vacateRound = idx + 1;
-            // 最終地点＝逃走車の現在地（離脱していない＝痕跡なし）
-            const isLast = idx === pts.length - 1;
-            const ct = isLast ? null : clueTypeForRound(vacateRound);
 
-            if (ct === null) {
-                // 最終位置: 番号ドットではなく車のアイコンを描画
-                ctx.fillStyle = '#050a12';
-                ctx.fillRect(cx - 19, cy - 23, 38, 46);
-                ctx.fillStyle = '#152435';
-                ctx.fillRect(cx - 17, cy - 21, 34, 42);
-                ctx.fillStyle = '#2f5a70';
-                ctx.fillRect(cx - 17, cy - 21, 34, 1);
-                ctx.fillRect(cx - 17, cy - 21, 1, 42);
-                ctx.fillStyle = '#7ee8fa';
-                ctx.fillRect(cx - 17, cy - 21, 4, 1);
-                ctx.fillRect(cx - 17, cy - 21, 1, 4);
-                ctx.fillRect(cx + 13, cy + 20, 4, 1);
-                ctx.fillRect(cx + 16, cy + 16, 1, 4);
-                drawPixelCar(ctx, cx, cy, 3);
-                idx++;
+        const searchColor = (s) => {
+            if (s.result === 'found') return '#ff5252';
+            if (s.result === 'clue') {
+                const b = S.buildings[s.y] && S.buildings[s.y][s.x];
+                return b && b.clue === 'YELLOW' ? '#ffd54f'
+                    : b && b.clue === 'RED' ? '#ff8a80'
+                    : '#82b1ff';
+            }
+            return '#54a8ff';
+        };
+        const searchCounts = new Map();
+        const drawSearch = (s) => {
+            const cx = Math.round(s.x * cell + cell / 2);
+            const cy = Math.round(s.y * cell + cell / 2);
+            const size = Math.round(cell - 10);
+            const left = Math.round(cx - size / 2);
+            const top = Math.round(cy - size / 2);
+            const color = searchColor(s);
+            // 捜索済みマスを淡く塗り、枠とラウンド番号で示す
+            ctx.globalAlpha = 0.16;
+            ctx.fillStyle = color;
+            ctx.fillRect(left, top, size, size);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = color;
+            ctx.fillRect(left, top, size, 2);
+            ctx.fillRect(left, top + size - 2, size, 2);
+            ctx.fillRect(left, top, 2, size);
+            ctx.fillRect(left + size - 2, top, 2, size);
+            // 小さな虫眼鏡モチーフ
+            const gx = left + size - 13, gy = top + 5;
+            ctx.fillStyle = color;
+            ctx.fillRect(gx, gy, 6, 6);
+            ctx.fillStyle = '#06111d';
+            ctx.fillRect(gx + 2, gy + 2, 2, 2);
+            ctx.fillRect(gx + 5, gy + 5, 2, 2);
+            // ラウンド番号
+            ctx.fillStyle = color;
+            ctx.font = '8px DotGothic16, monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('R' + s.round, left + 4, top + 3);
+            const ck = s.x + ',' + s.y;
+            const count = (searchCounts.get(ck) || 0) + 1;
+            searchCounts.set(ck, count);
+            if (count > 1) {
+                ctx.textAlign = 'right';
+                ctx.fillText('×' + count, left + size - 3, top + size - 11);
+            }
+        };
+        const drawCarAtEnd = (isFound) => {
+            const p = pts[pts.length - 1];
+            const cx = cxOf(p), cy = cyOf(p);
+            if (isFound) {
+                ctx.fillStyle = '#ff5252';
+                ctx.fillRect(cx - 22, cy - 22, 44, 3);
+                ctx.fillRect(cx - 22, cy + 19, 44, 3);
+                ctx.fillRect(cx - 22, cy - 22, 3, 44);
+                ctx.fillRect(cx + 19, cy - 22, 3, 44);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(cx - 18, cy - 18, 2, 2);
+                ctx.fillRect(cx + 16, cy - 18, 2, 2);
+                ctx.fillRect(cx - 18, cy + 16, 2, 2);
+                ctx.fillRect(cx + 16, cy + 16, 2, 2);
+            }
+            ctx.fillStyle = '#050a12';
+            ctx.fillRect(cx - 19, cy - 23, 38, 46);
+            ctx.fillStyle = '#152435';
+            ctx.fillRect(cx - 17, cy - 21, 34, 42);
+            ctx.fillStyle = '#2f5a70';
+            ctx.fillRect(cx - 17, cy - 21, 34, 1);
+            ctx.fillRect(cx - 17, cy - 21, 1, 42);
+            ctx.fillStyle = '#7ee8fa';
+            ctx.fillRect(cx - 17, cy - 21, 4, 1);
+            ctx.fillRect(cx - 17, cy - 21, 1, 4);
+            ctx.fillRect(cx + 13, cy + 20, 4, 1);
+            ctx.fillRect(cx + 16, cy + 16, 1, 4);
+            drawPixelCar(ctx, cx, cy, 3);
+        };
+
+        const searchLabel = (s) => {
+            const at = `(${s.x},${s.y})`;
+            if (s.result === 'found') return at + '発見';
+            if (s.result === 'clue') return at + '痕跡';
+            return at + '空';
+        };
+        const setStatus = (text) => {
+            if (routeStatusEl) routeStatusEl.textContent = text;
+        };
+
+        // 各ラウンドの警察捜索と逃走を時系列で再生する
+        const steps = [{ kind: 'start' }];
+        for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+            const searches = S.searchLog.filter(s => s.round === r);
+            if (showSearches && searches.length > 0) {
+                steps.push({ kind: 'police', round: r, searches });
+            }
+            if (pts[r]) {
+                steps.push({ kind: 'move', round: r, idx: r });
+            } else if (S.winner != null) {
+                break;
+            }
+        }
+        steps.push({ kind: 'finish' });
+
+        let stepIndex = 0;
+        const play = () => {
+            routePlayTimer = null;
+            if (routeModal.classList.contains('hidden')) return; // モーダルが閉じたら停止
+            if (stepIndex >= steps.length) return;
+            const step = steps[stepIndex++];
+            if (step.kind === 'start') {
+                setStatus(`スタート地点 (${pts[0].x},${pts[0].y})。各ラウンドの警察捜索を確認します。`);
+                routePlayTimer = setTimeout(play, 400);
                 return;
             }
-
-            const color = ct === 'YELLOW' ? '#ffd54f' : ct === 'RED' ? '#ef5350' : '#42a5f5';
-            drawClue(cx, cy, vacateRound, color);
-            idx++;
-            routePlayTimer = setTimeout(play, 480);
+            if (step.kind === 'police') {
+                step.searches.forEach(drawSearch);
+                const list = step.searches.map(searchLabel).join(' / ');
+                setStatus(`Round ${step.round} 警察の捜索: ${list}`);
+                routePlayTimer = setTimeout(play, 620);
+                return;
+            }
+            if (step.kind === 'move') {
+                const p = pts[step.idx];
+                const prev = pts[step.idx - 1];
+                drawSegment(cxOf(prev), cyOf(prev), cxOf(p), cyOf(p));
+                // この地点を離れたラウンド = この移動のラウンド
+                const ct = clueTypeForRound(step.round);
+                const color = ct === 'YELLOW' ? '#ffd54f' : ct === 'RED' ? '#ef5350' : '#42a5f5';
+                drawClue(cxOf(prev), cyOf(prev), step.round, color);
+                setStatus(`Round ${step.round} 逃走: (${prev.x},${prev.y}) → (${p.x},${p.y})`);
+                routePlayTimer = setTimeout(play, 500);
+                return;
+            }
+            if (step.kind === 'finish') {
+                drawCarAtEnd(S.winner === 'POLICE');
+                setStatus(S.winner === 'POLICE'
+                    ? '再生終了。赤い枠の地点で逃走車が発見されました。'
+                    : '再生終了。警察の捜索地点と逃走ルートを比較してみましょう。');
+            }
         };
         routePlayTimer = setTimeout(play, 250);
     }
@@ -2951,6 +3215,11 @@
             seedRandom(INITIAL_SEED);
         }
         S = createState(mode);
+        const snd = sound();
+        if (snd) {
+            snd.unlock();
+            snd.setGameActive(true);
+        }
         document.body.classList.remove('thief-view');
         splashScreen.classList.add('hidden');
         gameoverModal.classList.add('hidden');
@@ -2982,6 +3251,9 @@
         blindOverlay.classList.add('hidden');
         document.body.classList.remove('thief-view');
         splashScreen.classList.remove('hidden');
+        const snd = sound();
+        if (snd) snd.setGameActive(false);
+        sfx('select');
     }
 
     function bindEvents() {
@@ -2998,11 +3270,40 @@
         });
         $('#btn-route-play').addEventListener('click', showRouteReplay);
 
+        // サウンド ON/OFF
+        if (soundButton) {
+            soundButton.addEventListener('click', () => {
+                const s = sound();
+                if (!s) return;
+                s.unlock();
+                const muted = s.toggleMute();
+                syncSoundButton();
+                if (!muted) s.play('confirm');
+                buzz(10);
+            });
+        }
+        syncSoundButton();
+
+        // 折りたたみ（縦画面では凡例・ログを閉じる）
+        if (typeof window !== 'undefined' && window.matchMedia) {
+            const mq = window.matchMedia('(orientation: portrait) and (max-width: 860px)');
+            if (mq.addEventListener) mq.addEventListener('change', () => syncFoldBlocks());
+            else if (mq.addListener) mq.addListener(() => syncFoldBlocks());
+        }
+        syncFoldBlocks(true);
+
+        // ルート再生の警察捜索レイヤー切り替え
+        if (routeShowSearchEl) {
+            routeShowSearchEl.addEventListener('change', () => {
+                if (routeModal && !routeModal.classList.contains('hidden')) showRouteReplay();
+            });
+        }
+
         // ヘリセレクト
         Array.from(heliButtonsEl.children).forEach((btn, i) => {
             btn.addEventListener('click', () => onHeliSelect(i));
         });
-        btnEndPoliceTurn.addEventListener('click', () => { buzz(20); endPoliceTurnManually(); });
+        btnEndPoliceTurn.addEventListener('click', () => { buzz(20); sfx('confirm'); endPoliceTurnManually(); });
 
         // 横画面推奨ヒントの閉じる
         if (btnRotateClose) {
@@ -3039,6 +3340,8 @@
         const relayout = () => {
             clearTimeout(relayoutTimer);
             relayoutTimer = setTimeout(() => {
+                // 一部環境では matchMedia の change が来ないため、リサイズ時にも同期する
+                syncFoldBlocks();
                 renderSearchlight();
                 if (S && S.phase !== 'GAME_OVER') renderRoundTrack();
             }, 120);

@@ -28,9 +28,15 @@
                     <span class="px-logo px-logo-header" data-px-logo="header" aria-hidden="true"></span>
                     <span class="subtitle">警察 vs 逃走車</span>
                 </h1>
-                <div id="phase-indicator" class="phase-indicator">
-                    <span id="phase-label">フェーズ</span>
-                    <span id="turn-label" class="turn-label">--</span>
+                <div class="header-meta">
+                    <div id="phase-indicator" class="phase-indicator">
+                        <span id="phase-label">フェーズ</span>
+                        <span id="turn-label" class="turn-label">--</span>
+                    </div>
+                    <button id="btn-sound" class="btn btn-sound" type="button" aria-pressed="true" aria-label="サウンドをオン" title="サウンド ON/OFF">
+                        <span class="sound-icon" aria-hidden="true">🔊</span>
+                        <span class="sound-label">音ON</span>
+                    </button>
                 </div>
             </div>
 
@@ -40,24 +46,25 @@
             </div>
 
             <!-- 開示された痕跡（警察ビューのみ表示） -->
-            <div class="panel-block police-only" id="left-clues">
-                <h2 class="panel-title"><span class="px-ico" data-px-icon="search" aria-hidden="true"></span>発見した痕跡</h2>
+            <details class="panel-block fold-block police-only" id="left-clues" open>
+                <summary class="panel-title"><span class="px-ico" data-px-icon="search" aria-hidden="true"></span>発見した痕跡</summary>
                 <div id="clues-revealed" class="clues-revealed">
                     <span class="clue-empty">まだ痕跡は見つかっていません</span>
                 </div>
-            </div>
+            </details>
 
-            <div class="panel-block" id="left-legend">
-                <h2 class="panel-title"><span class="px-ico" data-px-icon="map" aria-hidden="true"></span>凡例</h2>
+            <details class="panel-block fold-block" id="left-legend" open>
+                <summary class="panel-title"><span class="px-ico" data-px-icon="map" aria-hidden="true"></span>凡例</summary>
                 <ul class="legend">
                     <li><span class="lg-ico" data-px-icon="clue-yellow" aria-hidden="true"></span>黄＝R1 の潜伏地点</li>
                     <li><span class="lg-ico" data-px-icon="clue-red" aria-hidden="true"></span>赤＝R6 の通過点</li>
                     <li><span class="lg-ico" data-px-icon="clue-blue" aria-hidden="true"></span>青＝その他の痕跡</li>
                     <li><span class="lg-ico" data-px-icon="heli" aria-hidden="true"></span>黄色く光る交差点＝移動</li>
                     <li><span class="lg-ico" data-px-icon="search" aria-hidden="true"></span>黄色く光るビル＝捜索</li>
-                    <li><span class="lg-ico" data-px-icon="check" aria-hidden="true"></span>チェックのビル＝空確定。ただし車は再進入可能</li>
+                    <li><span class="lg-ico" data-px-icon="check" aria-hidden="true"></span>チェックのビル＝捜索済みで空確定（車は未訪問なら進入可）</li>
+                    <li><span class="lg-ico" data-px-icon="warn" aria-hidden="true"></span>痕跡のビル＝犯人が滞在済み（車は戻れない）</li>
                 </ul>
-            </div>
+            </details>
         </header>
 
         <!-- ===== 中央カラム：盤面（最大化） ===== -->
@@ -87,24 +94,25 @@
             </div>
             <div id="panel-scroll">
             <div class="panel-block police-only">
-                <h2 class="panel-title"><span class="px-ico" data-px-icon="police" aria-hidden="true"></span>警察コマンド</h2>
+                <h2 class="panel-title"><span class="px-ico" data-px-icon="police" aria-hidden="true"></span>警察コマンド<span id="heli-ready-count" class="panel-count" aria-live="polite">3機 未行動</span></h2>
                 <div id="police-sub-indicator" class="police-sub-indicator" style="display:none;"></div>
                 <div id="heli-status" class="heli-status">
                     <!-- JSで動的に生成 -->
                 </div>
+                <div id="heli-progress" class="heli-progress" aria-hidden="true"></div>
                 <div id="heli-buttons" class="heli-buttons">
-                    <button class="btn btn-heli" data-heli="0">緑</button>
-                    <button class="btn btn-heli" data-heli="1">桃</button>
-                    <button class="btn btn-heli" data-heli="2">黄</button>
+                    <button class="btn btn-heli" data-heli="0" disabled aria-pressed="false"><span class="heli-btn-label">緑</span><span class="heli-btn-state">未行動</span></button>
+                    <button class="btn btn-heli" data-heli="1" disabled aria-pressed="false"><span class="heli-btn-label">桃</span><span class="heli-btn-state">未行動</span></button>
+                    <button class="btn btn-heli" data-heli="2" disabled aria-pressed="false"><span class="heli-btn-label">黄</span><span class="heli-btn-state">未行動</span></button>
                 </div>
             </div>
 
-            <div class="panel-block">
-                <h2 class="panel-title"><span class="px-ico" data-px-icon="log" aria-hidden="true"></span>ログ</h2>
+            <details class="panel-block fold-block" id="log-block" open>
+                <summary class="panel-title"><span class="px-ico" data-px-icon="log" aria-hidden="true"></span>ログ</summary>
                 <div id="log-area" class="log-area" aria-live="polite">
                     <div class="log-entry">ゲームを開始します。</div>
                 </div>
-            </div>
+            </details>
             </div>
 
             <!-- 親指で届く固定フッター（主アクション） -->
@@ -163,8 +171,10 @@
                         </ul>
                         <h3>犯人フェーズ</h3>
                         <ul>
-                            <li>逃走車を隣接する未訪問ビルへ1マス移動</li>
+                            <li>逃走車を隣接するビルへ1マス移動</li>
                             <li>直前のビルに痕跡チップを置く</li>
+                            <li><strong>痕跡が残るビル（滞在済み）には戻れません</strong></li>
+                            <li>警察が捜索して空だっただけのビルは未訪問なので進入できます</li>
                             <li>移動先がなければ警察の勝利</li>
                         </ul>
                         <h3>痕跡チップ</h3>
@@ -203,6 +213,16 @@
         <div class="route-content">
             <h2 id="route-modal-title"><span class="px-ico" data-px-icon="route" aria-hidden="true"></span>逃走ルート振り返り</h2>
             <canvas id="route-canvas" width="400" height="400"></canvas>
+            <div class="route-legend" aria-hidden="true">
+                <span class="route-key thief"></span>逃走ルート
+                <span class="route-key search"></span>警察の捜索
+                <span class="route-key found"></span>発見地点
+            </div>
+            <p id="route-status" class="route-status" aria-live="polite">再生すると、各ラウンドの警察の捜索と逃走ルートを順に表示します。</p>
+            <label class="route-toggle">
+                <input type="checkbox" id="route-show-search" checked />
+                <span>警察の捜索も表示する</span>
+            </label>
             <div class="route-controls">
                 <button id="btn-route-play" class="btn btn-primary"><span class="px-ico" data-px-icon="play" aria-hidden="true"></span>再生</button>
                 <button id="btn-route-close" class="btn btn-secondary"><span class="px-ico" data-px-icon="close" aria-hidden="true"></span>閉じる</button>
@@ -216,12 +236,16 @@
 <div id="rotate-hint" class="rotate-hint" role="dialog" aria-modal="true" aria-label="表示方向のご案内">
     <div class="rotate-hint-inner">
         <div class="rotate-icon px-ico" data-px-icon="rotate" aria-hidden="true"></div>
-        <h2>横画面がおすすめ</h2>
-        <p>タブレットを横にすると、盤面を大きく使えてタップもしやすくなります。</p>
+        <h2>横画面でもっと快適に</h2>
+        <p>縦画面のままでも、盤面を上部に固定し、ログや凡例を折りたたんで遊べます。横にすると盤面をさらに大きく表示できます。</p>
         <button id="btn-rotate-close" class="btn btn-rotate-close">このまま縦で遊ぶ</button>
     </div>
 </div>
 
+<!-- ==================== サイレン演出（発見・決着時） ==================== -->
+<div id="siren-overlay" class="siren-overlay" aria-hidden="true"></div>
+
+<script src="audio.js"></script>
 <script src="app.js"></script>
 <script type="module" src="pixelui.js"></script>
 </body>
