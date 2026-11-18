@@ -6,13 +6,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    /* 3カラム構成：中央（盤面）を最大化するため左右は clamp で抑える */
-    --left-w: clamp(180px, 19vw, 260px);
+    /* 操作パネルの幅（盤面は残り領域に合わせて自動縮小） */
     --panel-w: clamp(280px, 27vw, 380px);
-    /* 盤面幅（横画面では高さ基準で再計算） */
-    --board-w: min(92vw, 540px);
-    /* 横画面で盤面サイズを決める際に引く chrome 高さ */
-    --chrome-h: 0px;
 }
 
 html, body { height: 100%; }
@@ -45,30 +40,28 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     overflow: hidden;
 }
 
-/* ---------- Header（左カラム） ---------- */
+/* ---------- Header（上部固定バー） ---------- */
 #header {
-    grid-area: left;
+    flex: 0 0 auto;
     display: flex;
-    flex-direction: column;
-    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    padding: 14px 12px;
+    overflow: visible;
+    padding: 7px 12px;
     background: rgba(0, 20, 40, 0.5);
-    border-right: 2px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     backdrop-filter: blur(6px);
 }
-#header::-webkit-scrollbar { width: 6px; }
-#header::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
 .header-top {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
     gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 .title {
     font-size: 1.2rem;
@@ -77,6 +70,8 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     letter-spacing: 0.02em;
     color: #ffd166;
     text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    flex: 0 1 auto;
+    min-width: 0;
 }
 .title .subtitle {
     display: block;
@@ -112,13 +107,14 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 .turn-label.thief { color: #f9a826; }
 .turn-label.setup { color: #b8f2a7; }
 
-/* Round Track（左カラムではグリッドで折返し表示） */
+/* Round Track（ヘッダー内に1行で表示） */
 .round-track {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
-    gap: 8px 6px;
-    justify-items: center;
+    grid-template-columns: repeat(11, 28px);
+    gap: 5px;
+    justify-content: end;
     align-items: center;
+    flex: 0 0 auto;
 }
 .round-step {
     width: 30px;
@@ -155,36 +151,51 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     transform: scale(1.1);
 }
 
-/* ---------- Main（3カラム） ---------- */
+/* ---------- Main（ヘッダー＋盤面／操作パネル） ---------- */
 #main {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    display: grid;
-    grid-template-areas: "left center right";
-    /* 中央を最大化：左右は抑えた幅、余りはすべて中央へ */
-    grid-template-columns: var(--left-w) minmax(0, 1fr) var(--panel-w);
-    grid-template-rows: minmax(0, 1fr);
-    gap: 14px;
-    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    overflow: hidden;
 }
 
-/* ---------- Board（中央カラム：最大化） ---------- */
+/* 盤面と操作パネルを横並びにする領域（狭い画面では縦積み） */
+#play-area {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--panel-w);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 12px;
+}
+
+/* ---------- Board（残りの高さを最大化） ---------- */
 #board-section {
-    grid-area: center;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 0;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
+    /* 盤面の自動縮小に container query を使う */
+    container-type: size;
+    container-name: board;
 }
 #board-container {
     position: relative;
-    width: var(--board-w);
+    /* cq 非対応環境向けフォールバック（次の行が有効なら上書きされる） */
+    width: min(92vw, 560px);
+    width: min(100cqw, 100cqh, 560px);
     max-width: 100%;
     aspect-ratio: 1;
+    flex: none;
     background:
         linear-gradient(135deg, #3a4a5f 0%, #2c3a4d 100%);
     border-radius: 14px;
@@ -534,27 +545,40 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     line-height: 1;
 }
 
-/* Searchlight effect */
+/* Searchlight effect: 交差点に隣接するビルを1棟ずつ照らす */
 .searchlight {
+    --beam-rgb: 255, 246, 190;
     position: absolute;
-    background: radial-gradient(circle, rgba(255, 245, 180, 0.35) 0%, rgba(255, 245, 180, 0.15) 40%, transparent 70%);
-    pointer-events: none;
     z-index: 2;
-    animation: searchlight-pulse 2s ease-in-out infinite;
-    border-radius: 50%;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at var(--beam-x, 50%) var(--beam-y, 50%),
+            rgba(var(--beam-rgb), 0.58) 0%,
+            rgba(var(--beam-rgb), 0.3) 42%,
+            rgba(var(--beam-rgb), 0.1) 76%,
+            rgba(var(--beam-rgb), 0) 100%),
+        linear-gradient(rgba(var(--beam-rgb), 0.07), rgba(var(--beam-rgb), 0.07));
+    box-shadow: inset 0 0 18px rgba(var(--beam-rgb), 0.34);
+    image-rendering: pixelated;
+    animation: searchlight-pulse 1.4s steps(2) infinite;
 }
+.searchlight.heli-green  { --beam-rgb: 126, 232, 165; }
+.searchlight.heli-pink   { --beam-rgb: 255, 158, 199; }
+.searchlight.heli-yellow { --beam-rgb: 255, 224, 130; }
+.searchlight.searchlight-overview { animation-duration: 1.8s; }
 @keyframes searchlight-pulse {
-    0%, 100% { opacity: 0.7; }
+    0%, 100% { opacity: 0.66; }
     50%      { opacity: 1; }
 }
 
-/* ---------- Control Panel（右カラム） ---------- */
+/* ---------- Control Panel ---------- */
 #control-panel {
-    grid-area: right;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     min-height: 0;
+    min-width: 0;
+    height: auto;
 }
 /* 情報部分は内側スクロール、主アクションは常時表示 */
 #panel-scroll {
@@ -588,11 +612,13 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     padding-bottom: 4px;
 }
 
+/* 状態行はボタン側に統合（DOMはJS互換のため残す） */
 .heli-status {
-    display: flex;
-    flex-direction: column;
+    display: none;
+    flex-direction: row;
+    justify-content: space-around;
     gap: 4px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-size: 0.75rem;
 }
 .heli-status-row {
@@ -617,11 +643,13 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 .heli-status-row .hstate.acted { color: #78909c; }
 .heli-status-row .hstate.ready { color: #8bc34a; }
 
+/* ヘリの状態（緑・桃・黄の未行動／行動済）は、この横1列のボタンに集約する */
 .heli-buttons {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    justify-content: space-around;
     gap: 6px;
 }
+.heli-buttons .btn-heli { flex: 1 1 0; min-width: 0; }
 .btn {
     padding: 8px 12px;
     border-radius: 8px;
@@ -743,7 +771,7 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     line-height: 1.45;
 }
 
-/* 右カラム上部の操作案内（常時固定・内部スクロールの対象外） */
+/* 操作パネル上部の操作案内（常時固定・内部スクロールの対象外） */
 .hint-bar {
     flex: none;
     width: 100%;
@@ -788,11 +816,6 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 .clue-badge.red    { background: #ff8a80; color: #4a1010; }
 .clue-badge.blue   { background: #82b1ff; color: #0d2a5a; }
 
-/* 左カラム内の情報ブロック（コンパクト表示） */
-#header .panel-block { padding: 10px; }
-#header .panel-title { font-size: 0.8rem; }
-#left-clues .clues-revealed { font-size: 0.72rem; }
-#left-clues .clue-badge { font-size: 0.68rem; padding: 3px 6px; }
 .legend {
     list-style: none;
     display: flex;
@@ -1077,11 +1100,7 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
    ========================================================== */
 @media (orientation: landscape) {
     body {
-        --left-w: clamp(180px, 18vw, 250px);
         --panel-w: clamp(280px, 26vw, 380px);
-        /* 左カラム化＋ヒントバー右移設で、盤面の縦取り分は main の余白のみ */
-        --chrome-h: 24px;
-        --board-w: min(100%, calc(100dvh - var(--chrome-h)));
     }
     #app { overflow: hidden; }
 
@@ -1181,14 +1200,12 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     .heli-status-row.tappable:active { transform: scale(0.97); filter: brightness(1.3); }
     .heli-status-row.is-selected { box-shadow: inset 0 0 0 2px #ffd166; background: rgba(255,209,102,0.14); }
 
-    /* 左カラムは情報密度より優先でコンパクトに維持する */
-    #header .panel-title { font-size: 0.85rem; }
-    #left-clues .clue-badge { font-size: 0.78rem; padding: 5px 8px; }
+    /* 凡例はモーダル内で読みやすく保つ */
     .legend { font-size: 0.82rem; gap: 8px; }
     .legend .lg-dot { width: 15px; height: 15px; }
     .legend .lg-ico { font-size: 0.9rem; }
 
-    /* 右カラム上部のヒントバーは折返し前提で行間を広げる */
+    /* ヒントバーは折返し前提で行間を広げる */
     .hint-bar { padding: 10px 12px; }
     .hint-bar .help-text { line-height: 1.45; }
 }
@@ -1201,45 +1218,84 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     }
 }
 
-/* ---------- 縦向き・または幅が狭い画面は 1 カラムに畳む ---------- */
-@media (orientation: portrait), (max-width: 860px) {
-    body {
-        --chrome-h: 0px;
-        --board-w: min(92vw, 540px);
-    }
-    #app { overflow-y: auto; }
+/* ---------- 狭い画面：ヘッダーを圧縮し、盤面＋操作パネルを縦積み ---------- */
+@media (max-width: 860px) {
     #main {
-        flex: none;
-        grid-template-areas: "left" "center" "right";
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-        align-content: start;
-        max-width: 640px;
-        margin: 0 auto;
-        padding: 10px;
-        gap: 10px;
+        gap: 6px;
+        padding: 6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
     }
-    /* 左カラム → 上部の横バールに戻す */
     #header {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px;
-        overflow: visible;
-        border-right: none;
-        border-bottom: 2px solid rgba(255,255,255,0.12);
-        padding: 10px 12px;
+        gap: 4px 8px;
+        padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
+        border-radius: 0;
     }
-    .header-top { flex-direction: row; align-items: center; width: auto; gap: 10px; }
-    .title .subtitle { display: inline; margin-left: 8px; }
-    .phase-indicator { width: auto; min-width: 128px; align-items: flex-start; }
-    .round-track { flex: 1 1 200px; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); }
-    /* 痕跡・凡例は隠さず、横バール内の全幅行として続ける */
-    #header .panel-block { flex: 1 1 100%; }
-    #board-section { overflow: visible; }
-    #panel-scroll { overflow: visible; }
-    .log-area { max-height: 140px; }
+    .header-top { flex-wrap: wrap; width: 100%; gap: 8px; }
+    .title { flex: 0 0 auto; }
+    .title .subtitle { display: none; }
+    .px-logo-header { width: min(116px, 32vw); }
+    .header-meta { margin-left: auto; }
+    .header-meta .phase-indicator { min-width: 92px; padding: 4px 7px; }
+    .phase-indicator #phase-label { font-size: 0.64rem; }
+    .phase-indicator .turn-label { font-size: 0.86rem; }
+    .btn-sound, .btn-legend { min-width: 40px; padding: 3px 4px; font-size: 0.58rem; }
+    .btn-sound .sound-icon, .btn-legend .legend-btn-icon { font-size: 1rem; }
+    .btn-legend .legend-btn-label { font-size: 0.58rem; }
+    .round-track {
+        flex: 1 1 100%;
+        grid-template-columns: repeat(11, minmax(0, 1fr));
+        gap: 3px;
+        justify-content: stretch;
+    }
+    .round-step { width: 100%; height: auto; aspect-ratio: 1; font-size: 0.68rem; }
+    .round-step .dot { width: 5px; height: 5px; }
+    #play-area {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    #board-section { flex: 1 1 0; min-height: 0; }
+    #control-panel { flex: 0 0 auto; gap: 4px; }
+    #panel-scroll { flex: 0 1 auto; min-height: 0; overflow: visible; gap: 4px; }
+    .panel-block { padding: 4px 6px; }
+    .panel-title { font-size: 0.82rem; }
+    .hint-bar { min-height: 34px; padding: 5px 8px; }
+    .hint-bar .help-text { font-size: 0.78rem; line-height: 1.35; }
+    .heli-status { display: none; }
+    .heli-buttons { gap: 4px; }
+    .btn-heli { min-height: 46px; padding: 4px 0; }
+    .btn-heli .heli-btn-state { font-size: 0.56rem; }
+    .btn-end-turn { min-height: 48px; font-size: 1rem; }
     #route-canvas { width: min(100%, 400px, 44vh); }
+
+    /* ログはパネルを押し広げず、画面下部のドロワーとして表示 */
+    #log-block[open] #log-area {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: calc(60px + env(safe-area-inset-bottom));
+        z-index: 80;
+        max-height: min(42dvh, 320px);
+        min-height: 0;
+        border: 3px solid #1f3a52;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.72);
+    }
+}
+
+/* 狭い横画面：盤面とパネルを横並びにして盤面の高さを確保 */
+@media (orientation: landscape) and (min-width: 560px) and (max-width: 860px) {
+    #play-area {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) clamp(250px, 36vw, 300px);
+        grid-template-rows: minmax(0, 1fr);
+    }
+    #control-panel { min-height: 0; height: 100%; gap: 4px; }
+    #panel-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+    #log-block[open] #log-area {
+        position: static;
+        max-height: min(30dvh, 180px);
+        border-width: 3px;
+        box-shadow: none;
+    }
 }
 
 /* 縦持ちタブレットでは横画面を推奨（-dismissible） */
@@ -1269,6 +1325,13 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 /* 犯人ターン中は警察専用パネルを畳み、盤面に集中できる様にする */
 body.thief-view .police-only { display: none !important; }
 body.thief-view #header .phase-indicator { background: rgba(255, 100, 100, 0.2); }
+/* 犯人操作中もヘリの位置が分かるよう、減光せず金色に発光させる */
+body.thief-view .heli {
+    filter:
+        drop-shadow(0 0 3px rgba(255, 209, 102, 0.95))
+        drop-shadow(0 0 8px rgba(255, 209, 102, 0.55))
+        drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.45));
+}
 
 /* ---------- 動作緩和（WCAG 2.3.3 / prefers-reduced-motion） ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1398,16 +1461,11 @@ select { font-family: var(--px-font); }
 /* ---------- title / header ---------- */
 #header {
     background: rgba(6, 13, 22, 0.82);
-    border-right: 4px solid #1b3046;
+    border-right: none;
+    border-bottom: 4px solid #1b3046;
     border-radius: 0;
-    box-shadow: 5px 0 0 rgba(0, 0, 0, 0.22);
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.22);
     backdrop-filter: none;
-}
-#header::-webkit-scrollbar { width: 8px; }
-#header::-webkit-scrollbar-thumb {
-    background: #29445e;
-    border: 2px solid #0a121c;
-    border-radius: 0;
 }
 .title {
     color: var(--px-gold);
@@ -1984,16 +2042,6 @@ select { font-family: var(--px-font); }
     font-size: 9px;
     font-weight: 400;
 }
-.searchlight {
-    background: var(--px-searchlight) center / 100% 100% no-repeat;
-    border-radius: 0;
-    image-rendering: pixelated;
-    animation: px-light-blink 1.1s steps(2) infinite;
-}
-@keyframes px-light-blink {
-    0%, 100% { opacity: 0.68; }
-    50%      { opacity: 1; }
-}
 
 /* ==========================================================
    SPLASH / MODALS
@@ -2056,6 +2104,59 @@ select { font-family: var(--px-font); }
 .rules-body { color: #b8cfe0; }
 .rules-body h3 { color: var(--px-gold); text-shadow: 1px 1px 0 #000; }
 .rules-body .px-ico { width: 14px; height: 14px; }
+
+/* ---------- Legend Modal ---------- */
+.legend-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 170;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(3, 6, 10, 0.88);
+    animation: fade-in 0.18s;
+}
+.legend-content {
+    width: min(100%, 460px);
+    max-height: min(86dvh, 620px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    background: #0c1622;
+    border: 8px solid transparent;
+    border-image: var(--px-frame-modal) 8 / 8px stretch;
+    border-radius: 0;
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.65);
+    padding: 18px 20px;
+    animation: splash-appear 0.25s;
+}
+.legend-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #1f3a52;
+    color: var(--px-cyan);
+    font-size: 1.15rem;
+    text-shadow: 1px 1px 0 #000;
+}
+.legend-title .px-ico { width: 20px; height: 20px; }
+.legend-modal-list {
+    gap: 10px;
+    font-size: 0.86rem;
+    color: #cfe8ff;
+}
+.legend-modal-list li { align-items: flex-start; line-height: 1.45; }
+.legend-modal-list .lg-ico { margin-top: 1px; }
+.legend-close {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 18px;
+    font-size: 0.95rem;
+}
 
 .blind-content {
     background: #080e18;
@@ -2191,14 +2292,14 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
         border-radius: 0;
         box-shadow: 0 5px 0 rgba(0, 0, 0, 0.22);
     }
-    .px-logo-header { width: min(200px, 52vw); }
+    .px-logo-header { width: min(150px, 40vw); }
     .title { font-size: 1.05rem; }
     .panel-block { padding: 5px 4px; }
     .legend { font-size: 0.78rem; gap: 7px; }
 }
 
 @media (max-width: 700px) {
-    .px-logo-header { width: min(200px, 54vw); }
+    .px-logo-header { width: min(116px, 32vw); }
     .panel-title { font-size: 0.84rem; }
     .btn { font-size: 0.85rem; }
     .hint-bar { padding: 7px 8px; }
@@ -2234,15 +2335,24 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
    UX improvements: sound, heli status, fold blocks, FX
    ========================================================== */
 
-/* ---------- header meta / sound toggle ---------- */
+/* ---------- header meta / sound / legend toggle ---------- */
 .header-meta {
     display: flex;
     align-items: stretch;
     gap: 6px;
-    width: 100%;
+    flex: 0 0 auto;
+    width: auto;
+    margin-left: auto;
 }
-.header-meta .phase-indicator { flex: 1 1 auto; min-width: 0; }
-.btn-sound {
+.header-meta .phase-indicator { flex: 0 1 auto; min-width: 0; }
+.header-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    flex: none;
+}
+.btn-sound,
+.btn-legend {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
@@ -2257,11 +2367,90 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
     background-color: #2c4055;
 }
 .btn-sound .sound-icon { font-size: 1.05rem; line-height: 1.1; }
-.btn-sound .sound-label { white-space: nowrap; }
+.btn-sound .sound-label,
+.btn-legend .legend-btn-label { white-space: nowrap; }
 .btn-sound.is-muted {
     border-image-source: var(--px-frame-red);
     background-color: #3a2222;
     color: #ffb0a0;
+}
+.btn-legend .legend-btn-icon {
+    font-size: 1.05rem;
+    line-height: 1.1;
+    color: var(--px-gold);
+    font-weight: 700;
+}
+
+/* ---------- compact revealed-clues strip ---------- */
+.clues-strip {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 3px 8px;
+    background: rgba(6, 12, 20, 0.86);
+    border: 2px solid #1f3a52;
+    overflow: hidden;
+}
+.clues-strip-label {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #8fb4cf;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.clues-strip-label .px-ico { width: 14px; height: 14px; }
+.clues-strip .clues-revealed {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-height: 0;
+    gap: 4px;
+    padding: 1px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+.clues-strip .clues-revealed::-webkit-scrollbar { display: none; }
+.clues-strip .clue-badge {
+    flex: none;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    padding: 2px 7px;
+}
+.clues-strip .clue-empty {
+    color: #6f8ba3;
+    font-style: normal;
+    font-size: 0.72rem;
+}
+
+/* ---------- collapsed log bar / expandable history ---------- */
+.log-preview {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: #cfe8ff;
+}
+/* 最新1行バーは通常のパネルより薄い枠で高さを抑える */
+.log-fold {
+    border-width: 5px;
+    border-image-width: 5px;
+    padding: 2px 5px 2px;
+}
+.log-fold > summary { min-height: 28px; padding: 2px 0 3px; }
+.log-fold[open] > summary { margin-bottom: 4px; }
+.log-fold .log-area {
+    min-height: 0;
+    max-height: min(24dvh, 180px);
 }
 
 /* ---------- collapsible information blocks ---------- */
@@ -2290,7 +2479,6 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
 .fold-block > .legend,
 .fold-block > .log-area { margin: 0; }
 .fold-block > summary:focus-visible { outline: 2px solid var(--px-gold); outline-offset: 2px; }
-#left-legend .legend { margin-top: 2px; }
 #log-block { flex: 0 0 auto; }
 
 /* ---------- helicopter action status ---------- */
@@ -2340,13 +2528,13 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
 .btn.btn-heli {
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 4px;
     line-height: 1.05;
 }
-.btn.btn-heli::before { margin: 0; width: 22px; height: 22px; }
+.btn.btn-heli::before { margin: 0; width: 20px; height: 20px; }
 .btn-heli .heli-btn-label { font-size: 0.78rem; font-weight: 700; }
 .btn-heli .heli-btn-state { font-size: 0.56rem; opacity: 0.92; white-space: nowrap; }
 .btn-heli.is-ready:not(.selected):not(:disabled):not(.is-locked) {
@@ -2428,38 +2616,6 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
     100% { filter: brightness(1); }
 }
 
-.searchlight::before {
-    content: "";
-    position: absolute;
-    inset: 2%;
-    border-radius: 50%;
-    background: conic-gradient(
-        from 0deg,
-        rgba(255, 245, 180, 0) 0deg 18deg,
-        rgba(255, 245, 180, 0.5) 22deg 48deg,
-        rgba(255, 245, 180, 0) 52deg 360deg
-    );
-    animation: px-searchlight-sweep 3.6s linear infinite;
-    pointer-events: none;
-}
-.searchlight::after {
-    content: "";
-    position: absolute;
-    inset: 8%;
-    border-radius: 50%;
-    border: 3px solid rgba(255, 245, 180, 0.6);
-    animation: px-searchlight-ring 2.4s ease-out infinite;
-    pointer-events: none;
-}
-@keyframes px-searchlight-sweep {
-    to { transform: rotate(360deg); }
-}
-@keyframes px-searchlight-ring {
-    0%   { transform: scale(0.35); opacity: 0; }
-    20%  { opacity: 0.7; }
-    100% { transform: scale(1); opacity: 0; }
-}
-
 .siren-overlay {
     position: fixed;
     inset: 0;
@@ -2538,92 +2694,41 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
 .route-controls { margin-top: 6px; }
 
 /* ==========================================================
-   Smartphone portrait: fixed play area + folded info
+   1画面収容のための追加圧縮（小型スマホ・低い画面）
    ========================================================== */
-@media (orientation: portrait) and (max-width: 860px) {
-    html, body { height: 100%; overflow: hidden; }
-    #app { height: 100dvh; overflow: hidden; }
-    #main {
-        display: flex;
-        flex-direction: column;
-        flex: 1 1 auto;
-        align-content: stretch;
-        gap: 6px;
-        padding: 6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
-        max-width: none;
-        margin: 0;
-        overflow: hidden;
-    }
-    #header {
-        flex: 0 0 auto;
-        max-height: 38dvh;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
-        gap: 6px;
-    }
-    .header-top { flex-direction: row; align-items: center; width: 100%; gap: 8px; }
-    .title { flex: 0 0 auto; }
-    .px-logo-header { width: min(132px, 38vw); }
-    .header-meta { flex: 1 1 auto; width: auto; margin-left: auto; justify-content: flex-end; }
-    .header-meta .phase-indicator { flex: 0 1 auto; min-width: 104px; }
-    .btn-sound { min-width: 42px; padding: 4px 3px; }
-    .btn-sound .sound-label { display: none; }
-    .round-track {
-        flex: 1 1 100%;
-        grid-template-columns: repeat(11, minmax(0, 1fr));
-        gap: 3px;
-    }
-    .round-step { width: 100%; height: auto; aspect-ratio: 1; font-size: 0.72rem; }
-    .round-step .dot { width: 5px; height: 5px; }
-    #header .panel-block { flex: 1 1 calc(50% - 4px); min-width: 0; }
-    #header .fold-block {
-        padding: 3px 6px;
-        border: 2px solid #1f3a52;
-        border-image: none;
-        background: rgba(6, 12, 20, 0.92);
-    }
-    .fold-block { padding: 4px 5px 5px; }
-    .fold-block > summary { font-size: 0.78rem; padding: 2px 0 4px; white-space: nowrap; overflow: hidden; }
-    .fold-block[open] > summary { margin-bottom: 4px; }
-    /* 縦画面ではヘリ状態行を省略し、状態表示付きのコマンドボタンを
-       パネル内スクロールなしで押せるようにする。 */
-    .heli-status { display: none; }
-    #board-section { flex: 0 0 auto; }
-    #board-container { width: min(calc(100vw - 20px), 48dvh, 540px); }
-    #control-panel { flex: 1 1 0; min-height: 0; gap: 6px; }
-    #panel-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; }
-    #panel-footer { flex: 0 0 auto; }
-    .hint-bar { min-height: 40px; padding: 6px 8px; }
-    .btn-end-turn { min-height: 50px; font-size: 1rem; }
-    .log-area { max-height: 30dvh; }
-    .heli-status { margin-bottom: 4px; }
-    .heli-buttons { gap: 4px; }
-    .btn-heli .heli-btn-state { font-size: 0.52rem; }
-    #route-canvas { width: min(100%, 320px, 38dvh); }
-}
-
-@media (orientation: portrait) and (max-width: 860px) and (max-height: 700px) {
-    #board-container { width: min(calc(100vw - 20px), 38dvh, 540px); }
-    /* 画面の低い端末では案内とボタンをさらに詰め、操作系を先頭付近に残す。 */
+@media (max-width: 860px) and (max-height: 700px) {
+    /* 画面の低い端末では案内とボタンをさらに詰める */
     .hint-bar { min-height: 32px; padding: 4px 6px; gap: 5px; }
     .hint-bar .hint-icon { width: 18px; height: 18px; }
-    .hint-bar .help-text { font-size: 0.72rem; line-height: 1.35; }
-    .btn-end-turn { min-height: 44px; font-size: 0.92rem; }
-    .btn-heli { min-height: 44px; padding: 4px 0; }
-    .btn-heli .heli-btn-state { font-size: 0.58rem; }
-    #panel-scroll, #control-panel { gap: 4px; }
+    .hint-bar .help-text { font-size: 0.72rem; line-height: 1.3; }
+    .btn-end-turn { min-height: 46px; font-size: 0.92rem; }
+    .btn-heli { min-height: 44px; padding: 3px 0; }
+    .btn-heli .heli-btn-state { font-size: 0.52rem; }
+    .clues-strip { min-height: 26px; padding: 2px 6px; }
+    .panel-title { font-size: 0.78rem; margin-bottom: 4px; }
+    #control-panel, #panel-scroll { gap: 3px; }
+    .heli-progress { margin-bottom: 4px; }
 }
 
-@media (orientation: portrait) and (max-width: 860px) and (max-height: 620px) {
-    #board-container { width: min(calc(100vw - 20px), 34dvh, 540px); }
+@media (max-width: 860px) and (max-height: 600px) {
+    .clues-strip { min-height: 24px; }
+    .clues-strip-label { font-size: 0.66rem; }
+    .clues-strip .clue-badge { font-size: 0.64rem; padding: 1px 5px; }
+    .panel-block { padding: 3px 5px; }
+    .btn-heli { min-height: 42px; }
+    .btn-end-turn { min-height: 44px; }
+}
+
+@media (max-width: 400px) {
+    .px-logo-header { width: min(104px, 30vw); }
+    .header-meta .phase-indicator { min-width: 84px; padding: 3px 6px; }
+    .phase-indicator .turn-label { font-size: 0.8rem; }
+    .btn-sound, .btn-legend { min-width: 38px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .siren-overlay.active::before,
     .siren-overlay.active::after,
-    .searchlight::before,
-    .searchlight::after,
     .building.scan-target,
     .building.clue-reveal,
     .btn-heli.is-ready:not(.selected):not(:disabled):not(.is-locked) {

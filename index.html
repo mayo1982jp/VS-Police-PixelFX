@@ -13,15 +13,15 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%81%3C/text%3E%3C/svg%3E" />
 <title>VS Police - 警察 vs 逃走者</title>
 <link rel="preload" href="fonts/DotGothic16-Regular-subset.ttf" as="font" type="font/ttf" crossorigin />
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
 <div id="app">
 
-    <!-- ============ 3カラムレイアウト ============ -->
+    <!-- ============ ヘッダー＋盤面／操作パネルの1画面レイアウト ============ -->
     <main id="main">
 
-        <!-- ===== 左カラム：タイトルバー／フェーズ／ラウンド ===== -->
+        <!-- ===== ヘッダー：タイトル／フェーズ／ラウンド／凡例 ===== -->
         <header id="header">
             <div class="header-top">
                 <h1 class="title" aria-label="VS Police 警察 vs 逃走車">
@@ -33,10 +33,16 @@
                         <span id="phase-label">フェーズ</span>
                         <span id="turn-label" class="turn-label">--</span>
                     </div>
-                    <button id="btn-sound" class="btn btn-sound" type="button" aria-pressed="true" aria-label="サウンドをオン" title="サウンド ON/OFF">
-                        <span class="sound-icon" aria-hidden="true">🔊</span>
-                        <span class="sound-label">音ON</span>
-                    </button>
+                    <div class="header-actions">
+                        <button id="btn-sound" class="btn btn-sound" type="button" aria-pressed="true" aria-label="サウンドをオン" title="サウンド ON/OFF">
+                            <span class="sound-icon" aria-hidden="true">🔊</span>
+                            <span class="sound-label">音ON</span>
+                        </button>
+                        <button id="btn-legend" class="btn btn-legend" type="button" aria-haspopup="dialog" aria-controls="legend-modal" aria-expanded="false" aria-label="凡例を開く" title="凡例">
+                            <span class="legend-btn-icon" aria-hidden="true">？</span>
+                            <span class="legend-btn-label">凡例</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -44,83 +50,97 @@
             <div id="round-track" class="round-track" aria-label="ラウンドトラック">
                 <!-- JSで動的に生成 -->
             </div>
-
-            <!-- 開示された痕跡（警察ビューのみ表示） -->
-            <details class="panel-block fold-block police-only" id="left-clues" open>
-                <summary class="panel-title"><span class="px-ico" data-px-icon="search" aria-hidden="true"></span>発見した痕跡</summary>
-                <div id="clues-revealed" class="clues-revealed">
-                    <span class="clue-empty">まだ痕跡は見つかっていません</span>
-                </div>
-            </details>
-
-            <details class="panel-block fold-block" id="left-legend" open>
-                <summary class="panel-title"><span class="px-ico" data-px-icon="map" aria-hidden="true"></span>凡例</summary>
-                <ul class="legend">
-                    <li><span class="lg-ico" data-px-icon="clue-yellow" aria-hidden="true"></span>黄＝R1 の潜伏地点</li>
-                    <li><span class="lg-ico" data-px-icon="clue-red" aria-hidden="true"></span>赤＝R6 の通過点</li>
-                    <li><span class="lg-ico" data-px-icon="clue-blue" aria-hidden="true"></span>青＝その他の痕跡</li>
-                    <li><span class="lg-ico" data-px-icon="heli" aria-hidden="true"></span>黄色く光る交差点＝移動</li>
-                    <li><span class="lg-ico" data-px-icon="search" aria-hidden="true"></span>黄色く光るビル＝捜索</li>
-                    <li><span class="lg-ico" data-px-icon="check" aria-hidden="true"></span>チェックのビル＝捜索済みで空確定（車は未訪問なら進入可）</li>
-                    <li><span class="lg-ico" data-px-icon="warn" aria-hidden="true"></span>痕跡のビル＝犯人が滞在済み（車は戻れない）</li>
-                </ul>
-            </details>
         </header>
 
-        <!-- ===== 中央カラム：盤面（最大化） ===== -->
-        <section id="board-section">
-            <div id="board-container">
-                <!-- ビル 5x5 グリッド -->
-                <div id="buildings-layer" class="buildings-layer">
-                    <!-- JSで動的に生成 -->
+        <div id="play-area">
+            <!-- ===== 盤面（残りの高さを最大化） ===== -->
+            <section id="board-section" aria-label="ゲーム盤面">
+                <div id="board-container">
+                    <!-- ビル 5x5 グリッド -->
+                    <div id="buildings-layer" class="buildings-layer">
+                        <!-- JSで動的に生成 -->
+                    </div>
+                    <!-- 交差点 4x4 グリッド (重ねレイヤー) -->
+                    <div id="intersections-layer" class="intersections-layer">
+                        <!-- JSで動的に生成 -->
+                    </div>
+                    <!-- サーチライトレイヤー -->
+                    <div id="searchlight-layer" class="searchlight-layer"></div>
                 </div>
-                <!-- 交差点 4x4 グリッド (重ねレイヤー) -->
-                <div id="intersections-layer" class="intersections-layer">
-                    <!-- JSで動的に生成 -->
-                </div>
-                <!-- サーチライトレイヤー -->
-                <div id="searchlight-layer" class="searchlight-layer"></div>
-            </div>
-        </section>
+            </section>
 
-        <!-- コントロール・情報パネル -->
-        <aside id="control-panel">
-            <!-- 現在の操作案内（右カラム上部・常時固定） -->
-            <div id="hint-bar" class="hint-bar">
-                <span class="hint-icon px-ico" data-px-icon="pointer" aria-hidden="true"></span>
-                <span id="help-text" class="help-text">
-                    ヘリを選択し、移動または捜索を行ってください。
-                </span>
-            </div>
-            <div id="panel-scroll">
-            <div class="panel-block police-only">
-                <h2 class="panel-title"><span class="px-ico" data-px-icon="police" aria-hidden="true"></span>警察コマンド<span id="heli-ready-count" class="panel-count" aria-live="polite">3機 未行動</span></h2>
-                <div id="police-sub-indicator" class="police-sub-indicator" style="display:none;"></div>
-                <div id="heli-status" class="heli-status">
-                    <!-- JSで動的に生成 -->
+            <!-- 操作・情報パネル -->
+            <aside id="control-panel">
+                <!-- 発見した痕跡（横1行のコンパクトバッジ） -->
+                <div id="clues-strip" class="clues-strip police-only">
+                    <span class="clues-strip-label"><span class="px-ico" data-px-icon="search" aria-hidden="true"></span>痕跡:</span>
+                    <div id="clues-revealed" class="clues-revealed">
+                        <span class="clue-empty">なし</span>
+                    </div>
                 </div>
-                <div id="heli-progress" class="heli-progress" aria-hidden="true"></div>
-                <div id="heli-buttons" class="heli-buttons">
-                    <button class="btn btn-heli" data-heli="0" disabled aria-pressed="false"><span class="heli-btn-label">緑</span><span class="heli-btn-state">未行動</span></button>
-                    <button class="btn btn-heli" data-heli="1" disabled aria-pressed="false"><span class="heli-btn-label">桃</span><span class="heli-btn-state">未行動</span></button>
-                    <button class="btn btn-heli" data-heli="2" disabled aria-pressed="false"><span class="heli-btn-label">黄</span><span class="heli-btn-state">未行動</span></button>
-                </div>
-            </div>
 
-            <details class="panel-block fold-block" id="log-block" open>
-                <summary class="panel-title"><span class="px-ico" data-px-icon="log" aria-hidden="true"></span>ログ</summary>
-                <div id="log-area" class="log-area" aria-live="polite">
-                    <div class="log-entry">ゲームを開始します。</div>
+                <!-- 現在の操作案内 -->
+                <div id="hint-bar" class="hint-bar">
+                    <span class="hint-icon px-ico" data-px-icon="pointer" aria-hidden="true"></span>
+                    <span id="help-text" class="help-text">
+                        ヘリを選択し、移動または捜索を行ってください。
+                    </span>
                 </div>
-            </details>
-            </div>
 
-            <!-- 親指で届く固定フッター（主アクション） -->
-            <div id="panel-footer">
-                <button id="btn-end-police-turn" class="btn btn-end-turn police-only">警察ターン終了</button>
-            </div>
-        </aside>
+                <div id="panel-scroll">
+                    <div class="panel-block police-only" id="police-commands">
+                        <h2 class="panel-title"><span class="px-ico" data-px-icon="police" aria-hidden="true"></span>警察コマンド<span id="heli-ready-count" class="panel-count" aria-live="polite">3機 未行動</span></h2>
+                        <div id="police-sub-indicator" class="police-sub-indicator" style="display:none;"></div>
+                        <div id="heli-status" class="heli-status">
+                            <!-- JSで動的に生成 -->
+                        </div>
+                        <div id="heli-progress" class="heli-progress" aria-hidden="true"></div>
+                        <div id="heli-buttons" class="heli-buttons">
+                            <button class="btn btn-heli" data-heli="0" disabled aria-pressed="false"><span class="heli-btn-label">緑</span><span class="heli-btn-state">未行動</span></button>
+                            <button class="btn btn-heli" data-heli="1" disabled aria-pressed="false"><span class="heli-btn-label">桃</span><span class="heli-btn-state">未行動</span></button>
+                            <button class="btn btn-heli" data-heli="2" disabled aria-pressed="false"><span class="heli-btn-label">黄</span><span class="heli-btn-state">未行動</span></button>
+                        </div>
+                    </div>
+
+                    <!-- 最新1行をバー表示し、タップで履歴を展開するログ -->
+                    <details class="panel-block fold-block log-fold" id="log-block">
+                        <summary class="panel-title">
+                            <span class="px-ico" data-px-icon="log" aria-hidden="true"></span>ログ
+                            <span id="log-preview" class="log-preview">ゲームを開始します。</span>
+                        </summary>
+                        <div id="log-area" class="log-area" aria-live="polite">
+                            <div class="log-entry">ゲームを開始します。</div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- 親指で届く固定フッター（主アクション） -->
+                <div id="panel-footer">
+                    <button id="btn-end-police-turn" class="btn btn-end-turn police-only">警察ターン終了</button>
+                </div>
+            </aside>
+        </div>
     </main>
+
+    <!-- ==================== 凡例モーダル ==================== -->
+    <div id="legend-modal" class="legend-modal hidden" role="dialog" aria-modal="true" aria-labelledby="legend-modal-title">
+        <div class="legend-content">
+            <h2 id="legend-modal-title" class="legend-title">
+                <span class="px-ico" data-px-icon="map" aria-hidden="true"></span>凡例
+            </h2>
+            <ul class="legend legend-modal-list">
+                <li><span class="lg-ico" data-px-icon="clue-yellow" aria-hidden="true"></span>黄＝R1 の潜伏地点</li>
+                <li><span class="lg-ico" data-px-icon="clue-red" aria-hidden="true"></span>赤＝R6 の通過点</li>
+                <li><span class="lg-ico" data-px-icon="clue-blue" aria-hidden="true"></span>青＝その他の痕跡</li>
+                <li><span class="lg-ico" data-px-icon="heli" aria-hidden="true"></span>黄色く光る交差点＝移動</li>
+                <li><span class="lg-ico" data-px-icon="heli" aria-hidden="true"></span>ヘリのライト＝隣接する4棟を照射（犯人ターンは全機表示）</li>
+                <li><span class="lg-ico" data-px-icon="search" aria-hidden="true"></span>黄色く光るビル＝捜索</li>
+                <li><span class="lg-ico" data-px-icon="check" aria-hidden="true"></span>チェックのビル＝捜索済みで空確定（車は未訪問なら進入可）</li>
+                <li><span class="lg-ico" data-px-icon="warn" aria-hidden="true"></span>痕跡のビル＝犯人が滞在済み（車は戻れない）</li>
+            </ul>
+            <button id="btn-legend-close" class="btn btn-secondary legend-close" type="button">閉じる</button>
+        </div>
+    </div>
 
     <!-- ==================== ブラインドオーバーレイ ==================== -->
     <div id="blind-overlay" class="blind-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="blind-title">
@@ -246,7 +266,7 @@
 <div id="siren-overlay" class="siren-overlay" aria-hidden="true"></div>
 
 <script src="audio.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=7"></script>
 <script type="module" src="pixelui.js?v=3"></script>
 </body>
 </html>

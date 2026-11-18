@@ -86,18 +86,19 @@
 
     /* ---------- DOM ---------- */
     const $ = (sel) => document.querySelector(sel);
-    let boardContainer, buildingsLayer, intersectionsLayer, searchlightLayer;
-    let roundTrackEl, phaseLabelEl, turnLabelEl, logAreaEl, helpTextEl, cluesRevealedEl;
+    let boardSectionEl, boardContainer, buildingsLayer, intersectionsLayer, searchlightLayer;
+    let roundTrackEl, phaseLabelEl, turnLabelEl, logAreaEl, logPreviewEl, helpTextEl, cluesRevealedEl;
     let heliStatusEl, heliButtonsEl, hintBarEl, btnEndPoliceTurn;
     let heliReadyCountEl, heliProgressEl, soundButton;
+    let legendModal, legendOpenBtn, legendCloseBtn;
     let blindOverlay, blindTitle, blindMessage, blindConfirmBtn;
     let splashScreen, gameoverModal, gameoverIcon, gameoverTitle, gameoverMessage;
     let routeModal, routeCanvas, routeShowSearchEl, routeStatusEl;
     let sirenOverlayEl;
     let btnRotateClose;
-    let foldBlocks = [];
 
     function cacheElements() {
+        boardSectionEl     = $('#board-section');
         boardContainer     = $('#board-container');
         buildingsLayer     = $('#buildings-layer');
         intersectionsLayer = $('#intersections-layer');
@@ -106,6 +107,7 @@
         phaseLabelEl    = $('#phase-label');
         turnLabelEl     = $('#turn-label');
         logAreaEl       = $('#log-area');
+        logPreviewEl    = $('#log-preview');
         helpTextEl      = $('#help-text');
         cluesRevealedEl = $('#clues-revealed');
         heliStatusEl    = $('#heli-status');
@@ -115,6 +117,9 @@
         soundButton     = $('#btn-sound');
         hintBarEl       = $('#hint-bar');
         btnEndPoliceTurn= $('#btn-end-police-turn');
+        legendModal     = $('#legend-modal');
+        legendOpenBtn   = $('#btn-legend');
+        legendCloseBtn  = $('#btn-legend-close');
         blindOverlay    = $('#blind-overlay');
         blindTitle      = $('#blind-title');
         blindMessage    = $('#blind-message');
@@ -130,11 +135,6 @@
         routeStatusEl   = $('#route-status');
         sirenOverlayEl  = $('#siren-overlay');
         btnRotateClose  = $('#btn-rotate-close');
-        foldBlocks = [
-            $('#left-clues'),
-            $('#left-legend'),
-            $('#log-block'),
-        ].filter(Boolean);
     }
 
     /* ---------- タッチフィードバック（Android のバイブレーション） ---------- */
@@ -195,18 +195,37 @@
         setTimeout(apply, 0);
     }
 
-    /* ---------- 縦画面の折りたたみ（凡例・ログ） ---------- */
-    let lastFoldMobile = null;
-    function syncFoldBlocks(force) {
-        const mq = (typeof window !== 'undefined' && window.matchMedia)
-            ? window.matchMedia('(orientation: portrait) and (max-width: 860px)')
-            : null;
-        const mobile = !!(mq && mq.matches);
-        if (!force && mobile === lastFoldMobile) return;
-        lastFoldMobile = mobile;
-        foldBlocks.forEach((el) => {
-            el.open = !mobile;
-        });
+    /* ---------- 凡例モーダル ---------- */
+    function openLegendModal() {
+        if (!legendModal) return;
+        legendModal.classList.remove('hidden');
+        if (legendOpenBtn) legendOpenBtn.setAttribute('aria-expanded', 'true');
+        if (legendCloseBtn) legendCloseBtn.focus({ preventScroll: true });
+    }
+
+    function closeLegendModal() {
+        if (!legendModal || legendModal.classList.contains('hidden')) return;
+        legendModal.classList.add('hidden');
+        if (legendOpenBtn) {
+            legendOpenBtn.setAttribute('aria-expanded', 'false');
+            legendOpenBtn.focus({ preventScroll: true });
+        }
+    }
+
+    /* ---------- 盤面サイズ（container query 非対応環境のフォールバック） ---------- */
+    function fitBoardSize() {
+        if (!boardSectionEl || !boardContainer) return;
+        const supportsCq = typeof window !== 'undefined'
+            && window.CSS && typeof window.CSS.supports === 'function'
+            && window.CSS.supports('width', '100cqh');
+        if (supportsCq) {
+            if (boardContainer.style.width) boardContainer.style.removeProperty('width');
+            return;
+        }
+        const rect = boardSectionEl.getBoundingClientRect();
+        const size = Math.max(0, Math.floor(Math.min(rect.width, rect.height, 560)));
+        const next = size + 'px';
+        if (boardContainer.style.width !== next) boardContainer.style.width = next;
     }
 
     /* ---------- サウンドボタン表示 ---------- */
@@ -755,6 +774,11 @@
             logAreaEl.removeChild(logAreaEl.firstChild);
         }
         logAreaEl.scrollTop = logAreaEl.scrollHeight;
+        // 折りたたみバーには常に最新の1行だけを表示
+        if (logPreviewEl) {
+            logPreviewEl.textContent = msg;
+            logPreviewEl.title = msg;
+        }
     }
 
     /* ---------- 捜索結果バッジ「いない」 ---------- */
@@ -954,12 +978,15 @@
                 el.innerHTML = '';
                 const heli = S.police.helis.find(h => h.x === ix && h.y === iy);
                 if (heli) {
+                    const inPolicePhase = S.phase === 'ROUND_POLICE';
                     const h = document.createElement('div');
                     h.className = 'heli ' + heli.id;
-                    if (S.police.selected === heli.index && S.phase === 'ROUND_POLICE') h.classList.add('selected');
-                    if (heli.hasActed) h.classList.add('acted');
+                    if (S.police.selected === heli.index && inPolicePhase) h.classList.add('selected');
+                    // 行動済みの減光・チェックは警察ターン中のみ。
+                    // 犯人ターンでは全ヘリをはっきり表示して位置を分かりやすくする。
+                    if (heli.hasActed && inPolicePhase) h.classList.add('acted');
                     h.title = `${heli.label}ヘリ` + (S.mode === '3pvp' ? ` (警察${heli.owner === 0 ? 'A' : 'B'})` : '')
-                        + (heli.hasActed ? ' / 行動済み' : ' / 未行動');
+                        + (inPolicePhase ? (heli.hasActed ? ' / 行動済み' : ' / 未行動') : '');
                     h.setAttribute('aria-label', h.title);
                     // 3pvp: 所属バッジ
                     if (S.mode === '3pvp') {
@@ -969,7 +996,7 @@
                         h.appendChild(badge);
                     }
                     // 行動済みは盤面上でもチェックを付けて一目で分かるようにする
-                    if (heli.hasActed) {
+                    if (heli.hasActed && inPolicePhase) {
                         const check = document.createElement('span');
                         check.className = 'heli-check';
                         check.textContent = '✓';
@@ -1001,24 +1028,44 @@
 
     function renderSearchlight() {
         searchlightLayer.innerHTML = '';
-        if (!S || S.phase !== 'ROUND_POLICE') return;
-        const heli = S.police.helis[S.police.selected];
-        if (!heli || heli.hasActed || heli.x == null) return;
-        // 交差点の中心位置を計算してラジアルグラデーションを配置
-        const inter = intersectionEl(heli.x, heli.y);
-        if (!inter) return;
-        const boardRect = boardContainer.getBoundingClientRect();
-        const iRect = inter.getBoundingClientRect();
-        const cx = iRect.left - boardRect.left + iRect.width / 2;
-        const cy = iRect.top - boardRect.top + iRect.height / 2;
-        const light = document.createElement('div');
-        light.className = 'searchlight';
-        const size = iRect.width * 5;
-        light.style.width = size + 'px';
-        light.style.height = size + 'px';
-        light.style.left = (cx - size / 2) + 'px';
-        light.style.top  = (cy - size / 2) + 'px';
-        searchlightLayer.appendChild(light);
+        if (!S) return;
+
+        let helis;
+        let view;
+        if (S.phase === 'ROUND_POLICE') {
+            const heli = S.police.helis[S.police.selected];
+            if (!heli || heli.hasActed || heli.x == null) return;
+            helis = [heli];
+            view = 'police';
+        } else if (S.phase === 'ROUND_THIEF' || S.phase === 'SETUP_THIEF') {
+            // 犯人操作中は全ヘリの位置と照射範囲を可視化する
+            helis = S.police.helis.filter(h => h.x != null);
+            view = 'thief';
+        } else {
+            return;
+        }
+        if (helis.length === 0) return;
+
+        const layerRect = searchlightLayer.getBoundingClientRect();
+        helis.forEach((heli) => {
+            // 交差点に隣接する4棟（盤端では2棟）を、ビル1棟ずつ照らす
+            searchableBuildings(heli).forEach((b) => {
+                const bEl = buildingEl(b.x, b.y);
+                if (!bEl) return;
+                const bRect = bEl.getBoundingClientRect();
+                const light = document.createElement('div');
+                light.className = 'searchlight heli-' + heli.id
+                    + (view === 'thief' ? ' searchlight-overview' : ' searchlight-active');
+                // ヘリがいる交差点側のビルの角から光が広がるようにする
+                light.style.setProperty('--beam-x', b.x === heli.x ? '100%' : '0%');
+                light.style.setProperty('--beam-y', b.y === heli.y ? '100%' : '0%');
+                light.style.left = (bRect.left - layerRect.left) + 'px';
+                light.style.top  = (bRect.top - layerRect.top) + 'px';
+                light.style.width  = bRect.width + 'px';
+                light.style.height = bRect.height + 'px';
+                searchlightLayer.appendChild(light);
+            });
+        });
     }
 
     function renderControlPanel() {
@@ -1161,7 +1208,7 @@
     function renderCluesRevealed() {
         cluesRevealedEl.innerHTML = '';
         if (S.revealedClues.length === 0) {
-            cluesRevealedEl.innerHTML = '<span class="clue-empty">まだ痕跡は見つかっていません</span>';
+            cluesRevealedEl.innerHTML = '<span class="clue-empty">なし</span>';
             return;
         }
         S.revealedClues.forEach(c => {
@@ -3224,7 +3271,13 @@
         splashScreen.classList.add('hidden');
         gameoverModal.classList.add('hidden');
         routeModal.classList.add('hidden');
+        if (legendModal) legendModal.classList.add('hidden');
+        if (legendOpenBtn) legendOpenBtn.setAttribute('aria-expanded', 'false');
         logAreaEl.innerHTML = '';
+        if (logPreviewEl) {
+            logPreviewEl.textContent = 'ゲームを開始します。';
+            logPreviewEl.removeAttribute('title');
+        }
         buildBoardDOM();
         if (SEED_PARAM != null) {
             addLog(`乱数シード: ${INITIAL_SEED}`, 'log-info');
@@ -3284,13 +3337,25 @@
         }
         syncSoundButton();
 
-        // 折りたたみ（縦画面では凡例・ログを閉じる）
-        if (typeof window !== 'undefined' && window.matchMedia) {
-            const mq = window.matchMedia('(orientation: portrait) and (max-width: 860px)');
-            if (mq.addEventListener) mq.addEventListener('change', () => syncFoldBlocks());
-            else if (mq.addListener) mq.addListener(() => syncFoldBlocks());
+        // 凡例モーダルの開閉（ボタン／閉じる／背景クリック）
+        if (legendOpenBtn) {
+            legendOpenBtn.addEventListener('click', () => {
+                buzz(8);
+                sfx('select');
+                openLegendModal();
+            });
         }
-        syncFoldBlocks(true);
+        if (legendCloseBtn) {
+            legendCloseBtn.addEventListener('click', () => {
+                buzz(8);
+                closeLegendModal();
+            });
+        }
+        if (legendModal) {
+            legendModal.addEventListener('click', (e) => {
+                if (e.target === legendModal) closeLegendModal();
+            });
+        }
 
         // ルート再生の警察捜索レイヤー切り替え
         if (routeShowSearchEl) {
@@ -3313,9 +3378,14 @@
             });
         }
 
-        // Esc でルート再生モーダルのみ閉じる（勝敗モーダルは誤閉じ防止に残す）
+        // Esc で凡例／ルート再生モーダルを閉じる（勝敗モーダルは誤閉じ防止に残す）
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && routeModal && !routeModal.classList.contains('hidden')) {
+            if (e.key !== 'Escape') return;
+            if (legendModal && !legendModal.classList.contains('hidden')) {
+                closeLegendModal();
+                return;
+            }
+            if (routeModal && !routeModal.classList.contains('hidden')) {
                 if (routePlayTimer) { clearTimeout(routePlayTimer); routePlayTimer = null; }
                 routeModal.classList.add('hidden');
             }
@@ -3335,13 +3405,12 @@
         boardContainer.addEventListener('contextmenu', (e) => e.preventDefault());
         document.addEventListener('gesturestart', (e) => e.preventDefault());
 
-        // 画面回転・リサイズ時は盤面座標基準の描画を作り直す
+        // 画面回転・リサイズ時は盤面サイズと座標基準の描画を作り直す
         let relayoutTimer = null;
         const relayout = () => {
             clearTimeout(relayoutTimer);
             relayoutTimer = setTimeout(() => {
-                // 一部環境では matchMedia の change が来ないため、リサイズ時にも同期する
-                syncFoldBlocks();
+                fitBoardSize();
                 renderSearchlight();
                 if (S && S.phase !== 'GAME_OVER') renderRoundTrack();
             }, 120);
@@ -3349,6 +3418,20 @@
         window.addEventListener('resize', relayout);
         window.addEventListener('orientationchange', () => setTimeout(relayout, 260));
         if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
+        fitBoardSize();
+
+        // ログ展開などで盤面領域のサイズが変わったときも追従する
+        if (typeof ResizeObserver === 'function' && boardSectionEl) {
+            let observeTimer = null;
+            const observer = new ResizeObserver(() => {
+                clearTimeout(observeTimer);
+                observeTimer = setTimeout(() => {
+                    fitBoardSize();
+                    renderSearchlight();
+                }, 60);
+            });
+            observer.observe(boardSectionEl);
+        }
     }
 
     function init() {
