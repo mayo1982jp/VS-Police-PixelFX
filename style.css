@@ -2737,3 +2737,64 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
         animation: none !important;
     }
 }
+
+/* ==========================================================
+   ロードマップ修正 (2026-11-19): 鮮度バッジ / 無駄手の光らせ分け /
+   CSSカスケード是正 / 選択中ヘリボタンの色保持
+   ※ ファイル末尾に置くことで意図した上書きにする。
+      ただし低丈画面向けの圧縮指定 (max-height 系) は尊重し、
+      ボタン高さの是正は min-height: 701px のときに限る。
+   ========================================================== */
+
+/* --- 第1位: 捜索の鮮度バッジ (R=空振りしたラウンド) --- */
+.searched-badge {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    padding: 0 3px;
+    background: rgba(5, 10, 18, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: rgba(230, 240, 250, 0.75);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    z-index: 3;
+    pointer-events: none;
+}
+.searched-badge.is-current {
+    background: #0e4a5e;
+    border-color: #67e8f9;
+    color: #ffffff;
+}
+
+/* --- 第1位: 実質無駄な再捜索先は点滅させず破線枠で弱く示す --- */
+.building.searchable-redundant {
+    cursor: pointer;
+    filter: brightness(0.92);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 235, 120, 0.45),
+        2px 2px 0 rgba(0, 0, 0, 0.45);
+    outline: 2px dashed rgba(255, 235, 120, 0.55);
+    outline-offset: -5px;
+    animation: none;
+}
+
+/* --- 第6位: スマホ幅でラウンドトラックがはみ出さないよう均等割りを取り戻す --- */
+@media (max-width: 860px) {
+    .round-track { gap: 3px; }
+    .round-step { width: 100%; height: auto; aspect-ratio: 1; }
+}
+
+/* --- 第6位: 粗ポインタではヘリボタンの高さ56pxを維持 (低丈画面の圧縮は除く) --- */
+@media (pointer: coarse) and (max-width: 860px) and (min-height: 701px) {
+    .btn-heli { min-height: 56px; }
+}
+
+/* --- 第6位: 選択中でもヘリの色が分かるよう、金一色に潰さず濃色地+金枠にする --- */
+.btn-heli.selected {
+    background-color: #4a3a08;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0 45%, rgba(0, 0, 0, 0.18) 45% 100%);
+    color: #fff3b0;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}

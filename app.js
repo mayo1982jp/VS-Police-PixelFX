@@ -89,6 +89,7 @@
     let boardSectionEl, boardContainer, buildingsLayer, intersectionsLayer, searchlightLayer;
     let roundTrackEl, phaseLabelEl, turnLabelEl, logAreaEl, logPreviewEl, helpTextEl, cluesRevealedEl;
     let heliStatusEl, heliButtonsEl, hintBarEl, btnEndPoliceTurn;
+    let redundantConfirm = null; // 無駄な再捜索の2タップ確認 {x, y, heli}
     let heliReadyCountEl, heliProgressEl, soundButton;
     let legendModal, legendOpenBtn, legendCloseBtn;
     let blindOverlay, blindTitle, blindMessage, blindConfirmBtn;
@@ -817,8 +818,9 @@
     function render() {
         // 犯人ターン中は警察専用パネルを畳んで盤面優先のレイアウトに
         // （犯人ソロプレイの犯人フェーズも含まれる。警察ソロ＝cpuモードは警察ビュー維持）
-        const thiefView = (S.phase === 'ROUND_THIEF' || S.phase === 'SETUP_THIEF')
-            && S.mode !== 'cpu';
+        const thiefView = ((S.phase === 'ROUND_THIEF' || S.phase === 'SETUP_THIEF')
+            && S.mode !== 'cpu')
+            || (S.mode === 'cpu_police' && S.phase === 'ROUND_POLICE');
         document.body.classList.toggle('thief-view', thiefView);
         renderRoundTrack();
         renderPhaseIndicator();
@@ -918,9 +920,17 @@
                     chip.textContent = clueLabel[b.clue];
                     el.appendChild(chip);
                 }
-                // 捜索済みで痕跡未開示 (空)
+                // 捜索済みで痕跡未開示 (空) — いつ空振りしたか (鮮度) をバッジで出す
                 if (b.isSearched && !b.clueRevealed) {
                     el.classList.add('searched-empty');
+                    if (b.searchedRound != null) {
+                        const badge = document.createElement('span');
+                        badge.className = 'searched-badge'
+                            + (b.searchedRound === S.currentRound ? ' is-current' : '');
+                        badge.textContent = 'R' + b.searchedRound;
+                        badge.title = `Round ${b.searchedRound} に捜索して空だったビル`;
+                        el.appendChild(badge);
+                    }
                 }
                 // 犯人の車 (DOM に座標を埋め込まないよう、描画は犯人ビュー/終了時のみ)
                 if (showCar && S.thief.carX === bx && S.thief.carY === by) {
@@ -949,7 +959,13 @@
                     if (heli && !heli.hasActed && heli.x != null) {
                         const targets = searchableBuildings(heli);
                         if (targets.some(t => t.x === bx && t.y === by)) {
-                            el.classList.add('searchable');
+                            const tb = S.buildings[by][bx];
+                            // 痕跡開示済み or 今ラウンド捜索済みは実質無駄手なので光らせ方を変える
+                            if (tb.clueRevealed || tb.searchedRound === S.currentRound) {
+                                el.classList.add('searchable-redundant');
+                            } else {
+                                el.classList.add('searchable');
+                            }
                         }
                     }
                 }
@@ -1032,7 +1048,11 @@
 
         let helis;
         let view;
-        if (S.phase === 'ROUND_POLICE') {
+        if (S.phase === 'ROUND_POLICE' && S.mode === 'cpu_police') {
+            // 犯人ソロ: 警察CPUのターン中も全ヘリの照射を表示し包囲網を把握できるようにする
+            helis = S.police.helis.filter(h => h.x != null);
+            view = 'thief';
+        } else if (S.phase === 'ROUND_POLICE') {
             const heli = S.police.helis[S.police.selected];
             if (!heli || heli.hasActed || heli.x == null) return;
             helis = [heli];
@@ -1185,6 +1205,7 @@
                 return 'ビルをタップして逃走車を潜伏';
             case 'ROUND_POLICE': {
                 if (S.mode === 'cpu_police') return '警察CPUが捜索・移動を行っています…';
+                if (redundantConfirm) return `⚠ そのビルは${redundantConfirm.reason}。捜索すると1手消費します。本当に捜索する場合はもう一度タップ。`;
                 const heli = S.police.helis[S.police.selected];
                 const who = S.mode === '3pvp' ? (S.police.subPlayer === 0 ? '警察A' : '警察B') + 'さん、' : '';
                 if (!heli) return who + '下のボタンでヘリを選択';
@@ -1193,6 +1214,9 @@
                 return who + '黄色く光る交差点＝移動 ／ 黄色く光るビル＝捜索をタップ';
             }
             case 'ROUND_THIEF': {
+                if (S.mode === 'cpu_police' && S.lastPoliceSummary) {
+                    return `警察の行動: ${S.lastPoliceSummary} ／ 光るビルをタップして移動`;
+                }
                 const moves = validCarMoves();
                 return moves.length === 0
                     ? '移動先がありません！'
@@ -1235,6 +1259,22 @@
             const heli = S.police.helis[S.police.selected];
             if (!heli || heli.hasActed || heli.x == null) return;
             const targets = searchableBuildings(heli);
+            const tb = S.buildings[by][bx];
+            const isRedundant = targets.some(t => t.x === bx && t.y === by) && (tb.clueRevealed || tb.searchedRound === S.currentRound);
+            if (isRedundant) {
+                const keyStr = bx + ',' + by + ',' + heli.index;
+                if (!redundantConfirm || redundantConfirm.key !== keyStr) {
+                    redundantConfirm = { key: keyStr, x: bx, y: by, heli: heli.index,
+                        reason: tb.clueRevealed ? '痕跡が開示済みで、犯人はもういません' : '今ラウンド捜索済みです' };
+                    buzz([18, 26, 18]);
+                    sfx('deny');
+                    render();
+                    return;
+                }
+                redundantConfirm = null;
+            } else {
+                redundantConfirm = null;
+            }
             if (!targets.some(t => t.x === bx && t.y === by)) {
                 // タッチ操作では「反応なし」が誤解を生むため軽くフィードバック
                 addLog('そのビルは選んでいるヘリから捜索できません。光るビルをタップしてください。', 'log-alert');
@@ -1288,6 +1328,7 @@
     }
 
     function onHeliSelect(index) {
+        redundantConfirm = null;
         if (S.phase !== 'ROUND_POLICE' && S.phase !== 'SETUP_POLICE') return;
         if (S.phase === 'ROUND_POLICE' && (S.mode === 'cpu_police' || S.transitioning)) return;
         const heli = S.police.helis[index];
@@ -1511,6 +1552,7 @@
     }
 
     function doMoveCar(nx, ny) {
+        S.lastPoliceSummary = null;
         const { carX: ox, carY: oy } = S.thief;
         const round = S.currentRound;
         const clue = clueTypeForRound(round);
@@ -2954,13 +2996,18 @@
     function cpuPoliceTurn() {
         // 3機のヘリを順に行動させる (遅延付きで可視化)
         S.transitioning = true;
+        const summary = [];
         function nextHeli() {
             if (S.winner != null) { S.transitioning = false; return; }
             // 提案7: 未行動ヘリの中から、捜索価値の高い機体を次に選ぶ。
             const remaining = S.police.helis.filter(h => !h.hasActed && h.x != null);
             if (remaining.length === 0) {
-                // 全機行動済 -> 犯人フェーズへ
+                // 全機行動済 -> 犯人フェーズへ。犯人が見落とさないよう行動を1行要約する
                 S.transitioning = false;
+                if (summary.length > 0) {
+                    S.lastPoliceSummary = summary.join(' ／ ');
+                    addLog(`警察の行動: ${S.lastPoliceSummary}`, 'log-police');
+                }
                 maybeEndPolicePhase();
                 return;
             }
@@ -2973,11 +3020,18 @@
                 if (S.winner != null) { S.transitioning = false; return; }
                 if (action.type === 'search') {
                     doSearch(heli, action.target.x, action.target.y);
+                    const entry = S.searchLog[S.searchLog.length - 1];
+                    const res = entry && entry.round === S.currentRound && entry.heli === heli.id
+                        ? (entry.result === 'found' ? '発見!' : entry.result === 'clue' ? '痕跡発見!' : '空')
+                        : '空';
+                    summary.push(`${heli.label}[(${action.target.x},${action.target.y})捜索:${res}]`);
                 } else if (action.type === 'move') {
                     doMoveHeli(heli, action.target.x, action.target.y);
+                    summary.push(`${heli.label}[(${action.target.x},${action.target.y})へ移動]`);
                 } else {
                     heli.hasActed = true;
                     addLog(`${heli.label}ヘリは行動できませんでした。`, 'log-alert');
+                    summary.push(`${heli.label}[行動なし]`);
                     render();
                 }
                 if (S.winner == null) setTimeout(nextHeli, 700);
