@@ -1687,6 +1687,9 @@
     function endGame(winner) {
         S.phase = 'GAME_OVER';
         S.winner = winner;
+        disarmExit();
+        const exitBtn = document.getElementById('btn-exit');
+        if (exitBtn) exitBtn.classList.add('hidden');
         hideBlind();
         render();
         const snd = sound();
@@ -1694,8 +1697,10 @@
         buzz(winner === 'POLICE' ? [60, 50, 60, 50, 160] : [120, 80, 120]);
         flashSiren(winner === 'POLICE' ? 2800 : 1400);
         sfx(winner === 'POLICE' ? 'win' : 'lose');
-        // 全開示
-        setTimeout(() => {
+        // 全開示 — 最終盤面をまず1.4秒見せてからモーダルを出す (#3)
+        if (gameoverTimer) { clearTimeout(gameoverTimer); gameoverTimer = null; }
+        gameoverTimer = setTimeout(() => {
+            gameoverTimer = null;
             gameoverModal.classList.remove('hidden');
             gameoverIcon.textContent = '';
             if (winner === 'POLICE') {
@@ -1711,7 +1716,7 @@
             // モーダル表示直後は操作ボタンへフォーカス
             const focusBtn = document.getElementById('btn-replay');
             if (focusBtn) focusBtn.focus({ preventScroll: true });
-        }, 400);
+        }, 1400);
     }
 
     /* ==========================================================
@@ -3045,6 +3050,9 @@
        逃走ルート再生アニメ
        ========================================================== */
     let routePlayTimer = null; // 連打による多重再生チェーン防止用
+    let gameoverTimer = null; // 終局モーダルの遅延表示用 (#3: 1.4秒後に表示)
+    let exitArmTimer = null; // 終了ボタンの2タップ確認用 (#5)
+    let exitArmed = false;
     // ルート再生の最終地点に描く、UIスプライトと同じ雰囲気のドットカー
     function drawPixelCar(ctx, cx, cy, u = 3) {
         const rect = (x, y, w, h, c) => {
@@ -3304,6 +3312,25 @@
     /* ==========================================================
        初期化・イベント紐付け
        ========================================================== */
+    /* ---------- 終了ボタン (#5) / 結果モーダル (#3) の共通処理 ---------- */
+    function disarmExit() {
+        exitArmed = false;
+        if (exitArmTimer) { clearTimeout(exitArmTimer); exitArmTimer = null; }
+        const b = document.getElementById('btn-exit');
+        if (b) {
+            b.classList.remove('is-armed');
+            const l = b.querySelector('.exit-btn-label');
+            if (l) l.textContent = '終了';
+        }
+    }
+    function clearGameoverTimer() {
+        if (gameoverTimer) { clearTimeout(gameoverTimer); gameoverTimer = null; }
+    }
+    function hideBackToResult() {
+        const b = document.getElementById('btn-back-to-result');
+        if (b) b.classList.add('hidden');
+    }
+
     let gameSeedCounter = 0;
     function startGame(mode) {
         // シード未指定（通常プレイ）と ?seed=random のときは、ゲームごとに
@@ -3325,6 +3352,11 @@
         splashScreen.classList.add('hidden');
         gameoverModal.classList.add('hidden');
         routeModal.classList.add('hidden');
+        clearGameoverTimer();
+        hideBackToResult();
+        disarmExit();
+        const exitBtn = document.getElementById('btn-exit');
+        if (exitBtn) exitBtn.classList.remove('hidden');
         if (legendModal) legendModal.classList.add('hidden');
         if (legendOpenBtn) legendOpenBtn.setAttribute('aria-expanded', 'false');
         logAreaEl.innerHTML = '';
@@ -3356,6 +3388,11 @@
         gameoverModal.classList.add('hidden');
         routeModal.classList.add('hidden');
         blindOverlay.classList.add('hidden');
+        clearGameoverTimer();
+        hideBackToResult();
+        disarmExit();
+        const exitBtn = document.getElementById('btn-exit');
+        if (exitBtn) exitBtn.classList.add('hidden');
         document.body.classList.remove('thief-view');
         splashScreen.classList.remove('hidden');
         const snd = sound();
@@ -3371,6 +3408,35 @@
         $('#btn-replay').addEventListener('click', () => startGame(S.mode));
         $('#btn-to-splash').addEventListener('click', resetToSplash);
         $('#btn-review-route').addEventListener('click', showRouteReplay);
+        // #3: 終了モーダルを閉じて最終盤面を見る / 「結果を見る」で戻る
+        $('#btn-view-board').addEventListener('click', () => {
+            gameoverModal.classList.add('hidden');
+            const back = document.getElementById('btn-back-to-result');
+            if (back) back.classList.remove('hidden');
+            sfx('select');
+        });
+        $('#btn-back-to-result').addEventListener('click', () => {
+            hideBackToResult();
+            gameoverModal.classList.remove('hidden');
+            const f = document.getElementById('btn-replay');
+            if (f) f.focus({ preventScroll: true });
+            sfx('select');
+        });
+        // #5: 途中終了は2タップ確認 (1回目は武装表示のみ、3秒で解除)
+        $('#btn-exit').addEventListener('click', () => {
+            if (!S || S.phase === 'GAME_OVER') return;
+            const b = document.getElementById('btn-exit');
+            if (!exitArmed) {
+                exitArmed = true;
+                b.classList.add('is-armed');
+                const l = b.querySelector('.exit-btn-label');
+                if (l) l.textContent = '本当に終了？';
+                sfx('select');
+                exitArmTimer = setTimeout(disarmExit, 3000);
+                return;
+            }
+            resetToSplash();
+        });
         $('#btn-route-close').addEventListener('click', () => {
             if (routePlayTimer) { clearTimeout(routePlayTimer); routePlayTimer = null; }
             routeModal.classList.add('hidden');

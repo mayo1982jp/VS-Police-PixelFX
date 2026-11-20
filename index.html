@@ -13,7 +13,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%81%3C/text%3E%3C/svg%3E" />
 <title>VS Police - 警察 vs 逃走者</title>
 <link rel="preload" href="fonts/DotGothic16-Regular-subset.ttf" as="font" type="font/ttf" crossorigin />
-<link rel="stylesheet" href="style.css?v=10" />
+<link rel="stylesheet" href="style.css?v=11" />
 </head>
 <body>
 <div id="app">
@@ -41,6 +41,10 @@
                         <button id="btn-legend" class="btn btn-legend" type="button" aria-haspopup="dialog" aria-controls="legend-modal" aria-expanded="false" aria-label="凡例を開く" title="凡例">
                             <span class="legend-btn-icon" aria-hidden="true">？</span>
                             <span class="legend-btn-label">凡例</span>
+                        </button>
+                        <button id="btn-exit" class="btn btn-exit hidden" type="button" aria-label="ゲームを終了する" title="終了">
+                            <span class="exit-btn-icon" aria-hidden="true">✕</span>
+                            <span class="exit-btn-label">終了</span>
                         </button>
                     </div>
                 </div>
@@ -221,12 +225,15 @@
             <h2 id="gameover-title" class="gameover-title">ゲーム終了</h2>
             <p id="gameover-message" class="gameover-message"></p>
             <div class="gameover-buttons">
+                <button id="btn-view-board" class="btn btn-secondary"><span class="px-ico" data-px-icon="map" aria-hidden="true"></span>盤面を見る</button>
                 <button id="btn-review-route" class="btn btn-secondary"><span class="px-ico" data-px-icon="route" aria-hidden="true"></span>逃走ルートを再生</button>
                 <button id="btn-replay" class="btn btn-primary"><span class="px-ico" data-px-icon="replay" aria-hidden="true"></span>もう一度</button>
                 <button id="btn-to-splash" class="btn btn-secondary"><span class="px-ico" data-px-icon="home" aria-hidden="true"></span>タイトル</button>
             </div>
         </div>
     </div>
+
+    <button id="btn-back-to-result" class="btn btn-primary btn-back-to-result hidden" type="button">結果を見る</button>
 
     <!-- ==================== ルート再生モーダル ==================== -->
     <div id="route-modal" class="route-modal hidden" role="dialog" aria-modal="true" aria-labelledby="route-modal-title">
@@ -266,7 +273,7 @@
 <div id="siren-overlay" class="siren-overlay" aria-hidden="true"></div>
 
 <script src="audio.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 <script type="module" src="pixelui.js?v=3"></script>
 </body>
 </html>

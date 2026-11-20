@@ -1235,8 +1235,8 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
     .header-meta .phase-indicator { min-width: 92px; padding: 4px 7px; }
     .phase-indicator #phase-label { font-size: 0.64rem; }
     .phase-indicator .turn-label { font-size: 0.86rem; }
-    .btn-sound, .btn-legend { min-width: 40px; padding: 3px 4px; font-size: 0.58rem; }
-    .btn-sound .sound-icon, .btn-legend .legend-btn-icon { font-size: 1rem; }
+    .btn-sound, .btn-legend, .btn-exit { min-width: 40px; padding: 3px 4px; font-size: 0.58rem; }
+    .btn-sound .sound-icon, .btn-legend .legend-btn-icon, .btn-exit .exit-btn-icon { font-size: 1rem; }
     .btn-legend .legend-btn-label { font-size: 0.58rem; }
     .round-track {
         flex: 1 1 100%;
@@ -2352,7 +2352,8 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
     flex: none;
 }
 .btn-sound,
-.btn-legend {
+.btn-legend,
+.btn-exit {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
@@ -2368,11 +2369,38 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
 }
 .btn-sound .sound-icon { font-size: 1.05rem; line-height: 1.1; }
 .btn-sound .sound-label,
-.btn-legend .legend-btn-label { white-space: nowrap; }
+.btn-legend .legend-btn-label,
+.btn-exit .exit-btn-label { white-space: nowrap; }
 .btn-sound.is-muted {
     border-image-source: var(--px-frame-red);
     background-color: #3a2222;
     color: #ffb0a0;
+}
+.btn-exit .exit-btn-icon {
+    font-size: 1.05rem;
+    line-height: 1.1;
+    font-weight: 700;
+}
+.btn-exit.is-armed {
+    border-image-source: var(--px-frame-red);
+    background-color: #3a2222;
+    color: #ffb0a0;
+    min-width: 92px;
+}
+/* #3: 終了モーダルを閉じて盤面を見ている間の「結果に戻る」ボタン
+   中央寄せに transform を使うと .btn:hover の translateY(-1px) が
+   translateX(-50%) を上書きしてボタンが横へ逃げ、タップが届かなくなるため
+   margin auto で中央寄せする */
+.btn-back-to-result {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    width: max-content;
+    margin-inline: auto;
+    z-index: 140;
+    padding: 12px 22px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 .btn-legend .legend-btn-icon {
     font-size: 1.05rem;
@@ -2725,7 +2753,7 @@ body.thief-view #header .phase-indicator { background: #2a0e10; }
     .px-logo-header { width: min(104px, 30vw); }
     .header-meta .phase-indicator { min-width: 84px; padding: 3px 6px; }
     .phase-indicator .turn-label { font-size: 0.8rem; }
-    .btn-sound, .btn-legend { min-width: 38px; }
+    .btn-sound, .btn-legend, .btn-exit { min-width: 38px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
